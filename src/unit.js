@@ -37,7 +37,7 @@ export class Unit {
     this.root.traverse((o) => { o.userData.unit = this; });
 
     this.facing = faction === 'roman' ? 0 : Math.PI;   // face the enemy
-    this.root.rotation.y = this.facing;
+    this._applyFacing();
 
     this.state = 'idle';                     // idle | moving | attacking | hit | dead
     this.animT = Math.random() * 10;         // walk cycle phase
@@ -280,7 +280,14 @@ export class Unit {
     while (diff < -Math.PI) diff += Math.PI * 2;
     const max = this.turnSpeed * dt;
     this.facing += THREE.MathUtils.clamp(diff, -max, max);
-    this.root.rotation.y = this.facing;
+    this._applyFacing();
+  }
+
+  // The model's combat forward is its local -z (arms, shield, weapon and, since
+  // we moved the facial features there, the face). `facing` is the world angle
+  // toward the target, so add PI to point that -z side at the enemy.
+  _applyFacing() {
+    this.root.rotation.y = this.facing + Math.PI;
   }
 
   _clampToField() {
