@@ -81,8 +81,11 @@ export function buildHumanoid(cfg) {
   skull.position.y = 0.14;
   head.add(skull);
   // Simple face shadow / nose
+  // Facial features live on the -z side: that is the unit's combat "forward"
+  // (where the arms, shield and weapon are posed), so the face and the fight
+  // point the same way — toward the enemy.
   const nose = box(0.05, 0.06, 0.06, skin, 0.6);
-  nose.position.set(0, 0.12, 0.13);
+  nose.position.set(0, 0.12, -0.13);
   head.add(nose);
 
   if (c.helmet === 'roman') {
@@ -103,7 +106,7 @@ export function buildHumanoid(cfg) {
     // Cheek guards
     for (const sx of [-1, 1]) {
       const cheek = box(0.04, 0.14, 0.1, c.armor, 0.4, 0.55);
-      cheek.position.set(sx * 0.13, 0.16, 0.06);
+      cheek.position.set(sx * 0.13, 0.16, -0.06);
       head.add(cheek);
     }
   } else if (c.helmet === 'barbarian') {
@@ -125,7 +128,7 @@ export function buildHumanoid(cfg) {
     }
     // Beard
     const beard = box(0.18, 0.14, 0.08, c.hair || 0x5a3a1e, 1);
-    beard.position.set(0, 0.02, 0.1);
+    beard.position.set(0, 0.02, -0.1);
     head.add(beard);
   }
 
