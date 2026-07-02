@@ -257,10 +257,39 @@ export class Game {
   // ---- Main tick ---------------------------------------------------------
   update(dt) {
     for (const u of this.units) u.update(dt, this);
+    this._resolveCollisions();
     this._updateEffects(dt);
     this.ui.updateTally(this);
     this.ui.updateStats(this._inspectUnit());
     if (!this.over) this._checkOutcome();
+  }
+
+  // Circle-vs-circle body colliders: push overlapping fighters apart so no two
+  // ever occupy the same space. Fallen bodies are walked over (no collision).
+  _resolveCollisions() {
+    const list = this.units.filter((u) => u.state !== 'dead');
+    for (let i = 0; i < list.length; i++) {
+      const a = list[i];
+      for (let j = i + 1; j < list.length; j++) {
+        const b = list[j];
+        let dx = b.position.x - a.position.x;
+        let dz = b.position.z - a.position.z;
+        const min = a.radius + b.radius;
+        let d2 = dx * dx + dz * dz;
+        if (d2 >= min * min) continue;
+        if (d2 < 1e-6) {
+          // Exactly coincident — nudge apart on a fixed axis to break the tie.
+          dx = (a.id < b.id ? -1 : 1) * 0.05; dz = 0; d2 = 0.0025;
+        }
+        const d = Math.sqrt(d2);
+        const push = (min - d) * 0.5;
+        const nx = dx / d;
+        const nz = dz / d;
+        a.position.x -= nx * push; a.position.z -= nz * push;
+        b.position.x += nx * push; b.position.z += nz * push;
+      }
+    }
+    for (const u of list) u._clampToField();
   }
 
   // Which soldier's dossier to show: a lone selected legionary, or an

@@ -36,6 +36,7 @@ export class Unit {
     // Subtle per-soldier build: the burly stand a touch taller and broader.
     const scale = 0.94 + THREE.MathUtils.clamp((this.stats.build - 11) / 12, -0.06, 0.12);
     this.root.scale.setScalar(scale);
+    this.radius = 0.5 * scale;               // body collider (no two share a tile)
     this.root.userData.unit = this;
     this.root.traverse((o) => { o.userData.unit = this; });
 
@@ -68,11 +69,11 @@ export class Unit {
     const bar = new THREE.Group();
     const bg = new THREE.Mesh(
       new THREE.PlaneGeometry(0.9, 0.13),
-      new THREE.MeshBasicMaterial({ color: 0x1a0d0d })
+      new THREE.MeshBasicMaterial({ color: 0x1a0d0d, side: THREE.DoubleSide })
     );
     const fill = new THREE.Mesh(
       new THREE.PlaneGeometry(0.86, 0.09),
-      new THREE.MeshBasicMaterial({ color: this.faction === 'roman' ? 0x4fd06a : 0xe0453a })
+      new THREE.MeshBasicMaterial({ color: this.faction === 'roman' ? 0x4fd06a : 0xe0453a, side: THREE.DoubleSide })
     );
     fill.position.z = 0.001;
     this._fillFullWidth = 0.86;
@@ -517,9 +518,15 @@ export class Unit {
   }
 
   _billboard(game) {
-    // Face health bar toward the camera.
+    // Face the health bar at the camera. The bar is a child of `root`, which is
+    // rotated to face the enemy (barbarians ≈180° from Romans), so we must
+    // cancel that parent rotation — otherwise the bar turns edge-/back-on to the
+    // camera and vanishes (which hid the barbarians' bars entirely).
     if (this.healthBar.visible) {
-      this.healthBar.quaternion.copy(game.world.camera.quaternion);
+      this._bbq = this._bbq || new THREE.Quaternion();
+      this.root.getWorldQuaternion(this._bbq).invert();
+      this._bbq.multiply(game.world.camera.quaternion);
+      this.healthBar.quaternion.copy(this._bbq);
     }
   }
 
