@@ -1,0 +1,18 @@
+{
+  "name": "war-v1",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "War.v1 — a 3D real-time strategy RPG battlefield rendered with Three.js in a rotatable isometric view.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "three": "^0.169.0"
+  },
+  "devDependencies": {
+    "vite": "^5.4.8"
+  }
+}

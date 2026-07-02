@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#0a0d12" />
+    <title>War.v1 — Roman Legion vs Barbarians</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚔️</text></svg>" />
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="scene"></canvas>
+
+      <!-- Orientation guard for portrait phones -->
+      <div id="rotate-notice">
+        <div class="rotate-icon">📱↻</div>
+        <p>Rotate your device to landscape to command the legion.</p>
+      </div>
+
+      <!-- Loading veil -->
+      <div id="loading">
+        <div class="loader-ring"></div>
+        <div class="loader-text">MUSTERING THE LEGION…</div>
+      </div>
+
+      <!-- Heads-up display -->
+      <header id="topbar">
+        <div class="banner">
+          <span class="sigil">⚔️</span>
+          <span class="title">WAR<span class="dot">.</span>v1</span>
+        </div>
+        <div id="tally">
+          <div class="tally-side rome">
+            <span class="tally-label">ROMA</span>
+            <span id="rome-count" class="tally-count">0</span>
+          </div>
+          <span class="tally-vs">VS</span>
+          <div class="tally-side horde">
+            <span class="tally-label">HORDE</span>
+            <span id="horde-count" class="tally-count">0</span>
+          </div>
+        </div>
+        <div id="hint">Drag to rotate · Scroll to zoom · Click to select · Right-click to move</div>
+      </header>
+
+      <!-- Command menu -->
+      <nav id="commands">
+        <button class="cmd" data-cmd="attack">
+          <span class="cmd-key">Q</span><span class="cmd-ico">⚔️</span><span class="cmd-name">Attack</span>
+        </button>
+        <button class="cmd" data-cmd="stand">
+          <span class="cmd-key">W</span><span class="cmd-ico">🛡️</span><span class="cmd-name">Stand Ground</span>
+        </button>
+        <button class="cmd" data-cmd="retreat">
+          <span class="cmd-key">E</span><span class="cmd-ico">🏃</span><span class="cmd-name">Retreat</span>
+        </button>
+        <button class="cmd danger" data-cmd="surrender">
+          <span class="cmd-key">R</span><span class="cmd-ico">🏳️</span><span class="cmd-name">Surrender</span>
+        </button>
+      </nav>
+
+      <div id="selection-info">No legionaries selected — <em>click a Roman or drag a box</em></div>
+
+      <!-- Outcome banner -->
+      <div id="outcome">
+        <div class="outcome-card">
+          <h1 id="outcome-title">VICTORY</h1>
+          <p id="outcome-sub"></p>
+          <button id="restart">Sound the Horns Again</button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
