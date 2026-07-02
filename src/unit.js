@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { buildHumanoid, ROMAN_CONFIG, BARBARIAN_CONFIG } from './humanoid.js';
-import { rollAttributes, deriveStats, resolveAttack, pickName, rankFor } from './attributes.js';
+import { rollAttributes, deriveStats, pickName, rankFor } from './attributes.js';
+import { MOVES, pickCombo } from './moves.js';
 
 let _uid = 0;
 
@@ -41,14 +42,21 @@ export class Unit {
     this.root.traverse((o) => { o.userData.unit = this; });
 
     this.facing = faction === 'roman' ? 0 : Math.PI;   // face the enemy
+    this.spinOffset = 0;                     // extra yaw during spin moves
     this._applyFacing();
 
-    this.state = 'idle';                     // idle | moving | attacking | hit | dead
-    this.animT = Math.random() * 10;         // walk cycle phase
-    this.attackClock = 0;
+    this.state = 'idle';                     // idle | moving | attack | defense | flinch | dead
+    this.animT = Math.random() * 10;         // idle/guard phase
     this.attackCooldown = 0;
-    this.didHit = false;
-    this.hitTimer = 0;
+    this.hasShield = true;                   // both factions carry a shield
+
+    // Combat move/combo state.
+    this.move = null;                        // { def, name, t, hitDone } while a move plays
+    this.combo = null;                       // queued attack sequence
+    this.comboIndex = 0;
+    this.comboGap = 0;                       // pause between strikes
+    this._comboTarget = null;
+
     this.deathT = 0;
     this.surrenderT = 0;
     this.dropped = false;
@@ -114,24 +122,28 @@ export class Unit {
   }
 
   // ---- Combat ------------------------------------------------------------
-  applyDamage(amount, fromDir) {
+  applyDamage(amount, fromDir, stagger = false) {
     if (!this.alive || this.hasSurrendered) return;
     this.hp -= amount;
     if (this.hp <= 0) {
       this.hp = 0;
       this._die(fromDir);
-    } else {
-      // Stagger unless mid committed swing.
-      if (this.state !== 'attacking' || this.attackClock < 0.15) {
-        this.state = 'hit';
-        this.hitTimer = 0.28;
-      }
+      return;
+    }
+    // Flinch if we weren't mid-move; a stagger interrupts anything we were doing.
+    if (!this.move || stagger) {
+      if (stagger) { this.combo = null; this.comboGap = 0; }
+      this._startMove('flinch');
     }
   }
 
   _die(fromDir) {
     this.alive = false;
     this.state = 'dead';
+    this.move = null;
+    this.combo = null;
+    this.spinOffset = 0;
+    this._applyFacing();
     this.deathT = 0;
     this._deathDir = fromDir ? Math.sign(fromDir) : (Math.random() < 0.5 ? 1 : -1);
     this.healthBar.visible = false;
@@ -155,7 +167,30 @@ export class Unit {
 
     if (this.attackCooldown > 0) this.attackCooldown -= dt;
 
-    // Decide intent from current order.
+    // --- Combat action layer: a committed move (attack/defense/flinch) plays out.
+    if (this.move) { this._advanceMove(dt, game); this._finishFrame(game); return; }
+
+    // --- Mid-combo: brief guard between strikes, then the next strike.
+    if (this.combo) {
+      this.comboGap -= dt;
+      const t = this._currentTarget(game);
+      if (this.comboGap <= 0) {
+        if (this.comboIndex < this.combo.length && t &&
+            this.position.distanceTo(t.position) <= this.range + 0.6) {
+          this._comboTarget = t;
+          this._startMove(this.combo[this.comboIndex++]);
+        } else {
+          this.combo = null;
+          this.attackCooldown = 0.4 + Math.random() * 0.5;
+        }
+      }
+      if (t) this._faceTarget(t, dt);
+      this._animateGuard(dt);
+      this._finishFrame(game);
+      return;
+    }
+
+    // --- Decide intent from current order.
     let target = null;
     let desiredMove = null;
 
@@ -174,17 +209,6 @@ export class Unit {
       }
     }
 
-    // Resolve movement / attack.
-    if (this.state === 'hit') {
-      this.hitTimer -= dt;
-      if (this.hitTimer <= 0) this.state = 'idle';
-      this._animateHit(dt);
-      this._faceTargetInstant(target);
-      this._billboard(game);
-      this._updateHealthBar();
-      return;
-    }
-
     if (desiredMove) {
       // Retreating soldiers run for their lives; ordered marches are a walk.
       this._moveToward(desiredMove, dt, this.order === 'retreat' ? 'run' : 'walk');
@@ -193,22 +217,174 @@ export class Unit {
       this._faceTarget(target, dt);
       if (dist > this.range) {
         if (this.order === 'hold' && dist > this.range + 0.4) {
-          // Hold position: don't chase, just idle & face foe.
-          this._enterIdle(dt);
+          this._enterIdle(dt);                // hold position, face the foe
         } else {
           // Charge in at a run when far, settle to a walk closing the last step.
           this._stepToward(target.position, dt, dist > this.range + 1.6 ? 'run' : 'walk');
         }
+      } else if (this.attackCooldown <= 0) {
+        // In reach and ready — launch a fresh attack combo.
+        this._comboTarget = target;
+        this.combo = pickCombo(this.faction);
+        this.comboIndex = 0;
+        this.comboGap = 0;
+        this._animateGuard(dt);
       } else {
-        this._attack(dt, target, game);
+        this._animateGuard(dt);               // in reach, recovering — ready stance
       }
     } else {
       this._enterIdle(dt);
     }
 
+    this._finishFrame(game);
+  }
+
+  _finishFrame(game) {
     this._clampToField();
     this._updateHealthBar();
     this._billboard(game);
+  }
+
+  _currentTarget(game) {
+    if (this._comboTarget && this._comboTarget.alive && !this._comboTarget.hasSurrendered) {
+      return this._comboTarget;
+    }
+    return game.nearestEnemy(this);
+  }
+
+  // ---- Move player -------------------------------------------------------
+  _startMove(name) {
+    const def = MOVES[name];
+    if (!def) return;
+    this.move = { def, name, t: 0, hitDone: false };
+    this.state = def.type;
+    this.spinOffset = 0;
+  }
+
+  _advanceMove(dt, game) {
+    const mv = this.move;
+    const m = mv.def;
+    mv.t += dt;
+    const p = Math.min(1, mv.t / m.dur);
+    const target = this._comboTarget;
+    // Track the foe during a normal attack; spins turn on their own.
+    if (m.type === 'attack' && !m.spin && target && target.alive && !target.hasSurrendered) {
+      this._faceTarget(target, dt);
+    }
+    this._rest();
+    m.pose(this.j, p, this);
+    this._applyFacing();                       // picks up spinOffset if the pose set it
+    if (m.type === 'attack' && !mv.hitDone && p >= m.hit[0]) {
+      mv.hitDone = true;
+      this._resolveHit(m, game);
+    }
+    if (mv.t >= m.dur) this._endMove();
+  }
+
+  _endMove() {
+    const def = this.move.def;
+    this.move = null;
+    this.spinOffset = 0;
+    this._applyFacing();
+    if (def.type === 'attack' && this.combo && this.comboIndex < this.combo.length) {
+      this.comboGap = 0.06 + Math.random() * 0.1;       // wind up the next strike
+    } else if (def.type === 'attack') {
+      this.combo = null;
+      this.attackCooldown = 0.25 + Math.random() * 0.35;
+    } else {
+      this.attackCooldown = Math.max(this.attackCooldown, 0.12 + Math.random() * 0.18);
+    }
+    this.state = 'idle';
+  }
+
+  // Resolve an attack's impact frame against its target(s).
+  _resolveHit(m, game) {
+    const targets = m.aoe
+      ? game.enemiesWithin(this, m.reach + 0.3)
+      : (this._comboTarget ? [this._comboTarget] : []);
+    for (const tgt of targets) {
+      if (!tgt || !tgt.alive || tgt.hasSurrendered) continue;
+      if (this.position.distanceTo(tgt.position) > m.reach + 0.4) {
+        if (!m.aoe) game.floatingText(tgt.position, 'miss', 0xbfc6cf, 0.7);
+        continue;
+      }
+      // Wild miss from attacker accuracy.
+      if (Math.random() > Math.min(0.98, this.stats.accuracy + 0.12)) {
+        game.floatingText(tgt.position, 'miss', 0xbfc6cf, 0.7);
+        continue;
+      }
+      // Defender may block or dodge (unless we're punching through with a bash).
+      if (tgt._defend(this, m, game) !== 'hit') continue;
+      const crit = Math.random() < this.stats.crit;
+      let dmg = this.stats.dmg * (m.dmgMul || 1) * (crit ? 1.9 : 1) * (1 - tgt.stats.toughness);
+      dmg *= 0.9 + Math.random() * 0.2;
+      const dir = Math.sign(tgt.position.x - this.position.x) || 1;
+      tgt.applyDamage(dmg, -dir, m.stagger);
+      game.spawnHitSpark(tgt.position, this.faction, crit);
+      game.floatingText(
+        tgt.position,
+        crit ? `CRIT ${Math.round(dmg)}` : `${Math.round(dmg)}`,
+        crit ? 0xffd24f : this.faction === 'roman' ? 0xffe0a0 : 0xff9a70,
+        crit ? 1.35 : 1
+      );
+      if (m.stagger) tgt._knockback(this, 0.3);
+    }
+  }
+
+  // Decide how this unit reacts to an incoming blow: 'dodge' | 'block' | 'hit'.
+  _defend(attacker, m, game) {
+    // Committed to your own swing — no free reactions, trade blows.
+    if (this.move && this.move.def.type === 'attack') return 'hit';
+    // Sidestep: nimble fighters read heavy, telegraphed attacks more easily.
+    let dodgeP = Math.min(0.3, this.stats.dodge * (m.heavy ? 1.25 : 1));
+    if (Math.random() < dodgeP) {
+      this._interruptWith(Math.random() < 0.5 ? 'dodgeL' : 'dodgeR', attacker);
+      game.floatingText(this.position, 'dodge', 0x8fd0ff, 0.85);
+      return 'dodge';
+    }
+    // Shield block (a bash punches straight through).
+    if (this.hasShield && !m.stagger) {
+      const blockP = Math.min(0.47, this.stats.block * (m.aoe ? 0.85 : 1));
+      if (Math.random() < blockP) {
+        this._interruptWith('block', attacker);
+        const chip = attacker.stats.dmg * (m.dmgMul || 1) * 0.12;   // shields still ring
+        this.hp = Math.max(0, this.hp - chip);
+        game.spawnHitSpark(this.position, this.faction, false);
+        game.floatingText(this.position, 'block', 0xdedede, 0.85);
+        if (this.hp <= 0) this._die(0);
+        return 'block';
+      }
+    }
+    return 'hit';
+  }
+
+  _interruptWith(name, attacker) {
+    this.combo = null;
+    this.comboGap = 0;
+    if (attacker) {
+      const dx = attacker.position.x - this.position.x;
+      const dz = attacker.position.z - this.position.z;
+      this.facing = Math.atan2(dx, dz);
+      this._applyFacing();
+      if (name.startsWith('dodge')) {
+        // Hop to the side, perpendicular to the incoming attack.
+        const side = name === 'dodgeL' ? 1 : -1;
+        const px = -(this.position.z - attacker.position.z);
+        const pz = this.position.x - attacker.position.x;
+        const len = Math.hypot(px, pz) || 1;
+        this.position.x += (px / len) * 0.5 * side;
+        this.position.z += (pz / len) * 0.5 * side;
+      }
+    }
+    this._startMove(name);
+  }
+
+  _knockback(attacker, amount) {
+    const dx = this.position.x - attacker.position.x;
+    const dz = this.position.z - attacker.position.z;
+    const len = Math.hypot(dx, dz) || 1;
+    this.position.x += (dx / len) * amount;
+    this.position.z += (dz / len) * amount;
   }
 
   _moveToward(pointV, dt, gait = 'run') {
@@ -235,50 +411,27 @@ export class Unit {
     this._moveToward(pointV, dt, gait);
   }
 
-  _attack(dt, target, game) {
-    this.state = 'attacking';
-    if (this.attackClock === 0 && this.attackCooldown <= 0) {
-      // begin a swing
-      this.didHit = false;
-    }
-    if (this.attackCooldown <= 0) {
-      this.attackClock += dt;
-      const p = this.attackClock / this.attackTime;
-      // Land the blow at the apex of the swing.
-      if (!this.didHit && p >= 0.42) {
-        this.didHit = true;
-        if (this.position.distanceTo(target.position) <= this.range + 0.5) {
-          const dir = Math.sign(target.position.x - this.position.x) || 1;
-          const res = resolveAttack(this, target);
-          if (res.hit) {
-            target.applyDamage(res.dmg, -dir);
-            game.spawnHitSpark(target.position, this.faction, res.crit);
-            game.floatingText(
-              target.position,
-              res.crit ? `CRIT ${Math.round(res.dmg)}` : `${Math.round(res.dmg)}`,
-              res.crit ? 0xffd24f : this.faction === 'roman' ? 0xffe0a0 : 0xff9a70,
-              res.crit ? 1.35 : 1
-            );
-          } else {
-            game.floatingText(target.position, 'miss', 0xbfc6cf, 0.75);
-          }
-        }
-      }
-      if (p >= 1) {
-        this.attackClock = 0;
-        this.attackCooldown = 0.35 + Math.random() * 0.2;
-      }
-      this._animateAttack(this.attackClock / this.attackTime);
-    } else {
-      this._animateIdle(dt);
-    }
-  }
-
   _enterIdle(dt) {
     this.state = 'idle';
-    this.attackClock = 0;
     if (this._desiredFacing !== undefined) this._turn(dt);
     this._animateIdle(dt);
+  }
+
+  // A ready fighting stance between strikes: weapon up, shield forward, a light
+  // bounce on bent knees.
+  _animateGuard(dt) {
+    this.animT += dt;
+    this._rest();
+    this.j.body.position.y = Math.sin(this.animT * 5) * 0.02;
+    this.j.chest.rotation.x = -0.1;
+    this.j.leftHip.rotation.x = 0.14;
+    this.j.rightHip.rotation.x = -0.14;
+    this.j.leftKnee.rotation.x = -0.22;
+    this.j.rightKnee.rotation.x = -0.22;
+    this.j.rightShoulder.rotation.set(-0.35, 0, 0);   // blade up, ready
+    this.j.rightElbow.rotation.x = 1.05;
+    this._applyHold();                                 // shield in guard
+    this.state = 'guard';
   }
 
   // ---- Facing ------------------------------------------------------------
@@ -309,7 +462,7 @@ export class Unit {
   // we moved the facial features there, the face). `facing` is the world angle
   // toward the target, so add PI to point that -z side at the enemy.
   _applyFacing() {
-    this.root.rotation.y = this.facing + Math.PI;
+    this.root.rotation.y = this.facing + Math.PI + (this.spinOffset || 0);
   }
 
   _clampToField() {
@@ -399,56 +552,6 @@ export class Unit {
     this._applyHold();
     this.j.leftShoulder.rotation.x += R * 0.3;     // shield arm pumps too
     this.j.leftElbow.rotation.x += 0.15;
-  }
-
-  _animateAttack(p) {
-    this._rest();
-    this.j.chest.rotation.x = 0.08;
-    const j = this.j;
-    if (this.faction === 'barbarian') {
-      // Big overhead chop.
-      if (p < 0.42) {
-        const w = p / 0.42;                 // wind up
-        j.rightShoulder.rotation.x = -0.2 - w * 2.6;
-        j.rightElbow.rotation.x = 0.2 + w * 0.6;
-        j.chest.rotation.x = 0.08 - w * 0.25;
-        j.chest.rotation.y = -w * 0.3;
-      } else {
-        const w = (p - 0.42) / 0.58;        // strike + recover
-        const s = Math.sin(Math.min(w, 1) * Math.PI * 0.5);
-        j.rightShoulder.rotation.x = -2.8 + s * 3.6;
-        j.rightElbow.rotation.x = 0.8 - s * 0.6;
-        j.chest.rotation.x = -0.17 + s * 0.5;
-        j.chest.rotation.y = -0.3 + s * 0.3;
-        j.rightHip.rotation.x = -s * 0.2;
-      }
-    } else {
-      // Roman: shield-forward gladius thrust/slash.
-      if (p < 0.4) {
-        const w = p / 0.4;
-        j.rightShoulder.rotation.x = 0.2 + w * 0.3;
-        j.rightShoulder.rotation.y = -w * 0.6;     // draw back
-        j.rightElbow.rotation.x = 0.4 + w * 1.4;
-        j.chest.rotation.y = w * 0.35;
-      } else {
-        const w = (p - 0.4) / 0.6;
-        const s = Math.sin(Math.min(w, 1) * Math.PI * 0.5);
-        j.rightShoulder.rotation.x = 0.5 - s * 0.2;
-        j.rightShoulder.rotation.y = -0.6 + s * 0.9;  // thrust forward
-        j.rightElbow.rotation.x = 1.8 - s * 1.6;
-        j.chest.rotation.y = 0.35 - s * 0.55;
-        j.body.position.z = 0;
-      }
-    }
-    this._applyHold();
-  }
-
-  _animateHit(dt) {
-    this._rest();
-    const k = this.hitTimer / 0.28;
-    this.j.chest.rotation.x = -0.35 * k;    // recoil back
-    this.j.head.rotation.x = -0.2 * k;
-    this.j.body.position.y = 0.02 * k;
   }
 
   _animateDeath(dt) {
