@@ -52,6 +52,17 @@ export class Game {
   livingRomans() { return this.romans.filter((u) => u.alive && !u.hasSurrendered); }
   livingHorde() { return this.horde.filter((u) => u.alive && !u.hasSurrendered); }
 
+  // Every living enemy of `unit` within radius r (used by spin/AoE attacks).
+  enemiesWithin(unit, r) {
+    const out = [];
+    for (const u of this.units) {
+      if (u.faction === unit.faction) continue;
+      if (!u.alive || u.hasSurrendered) continue;
+      if (unit.position.distanceTo(u.position) <= r) out.push(u);
+    }
+    return out;
+  }
+
   nearestEnemy(unit) {
     let best = null;
     let bestD = Infinity;

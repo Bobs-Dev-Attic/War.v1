@@ -65,8 +65,8 @@ export function rankFor(faction, exp) {
 export function deriveStats(a) {
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
   return {
-    maxHp: Math.round(40 + a.con * 5 + a.exp * 2),
-    dmg: 3 + a.str * 1.05 + a.exp * 0.4,
+    maxHp: Math.round(36 + a.con * 4.5 + a.exp * 1.5),
+    dmg: 4 + a.str * 1.15 + a.exp * 0.5,
     // Higher DEX / EXP → faster strikes (shorter time between blows).
     attackTime: clamp(1.55 - a.dex * 0.045 - a.exp * 0.02, 0.6, 1.55),
     // Movement speed in world units/sec (used at a run; walking scales down).
@@ -76,6 +76,8 @@ export function deriveStats(a) {
     accuracy: clamp(0.55 + a.dex * 0.016 + a.exp * 0.02, 0.3, 0.98),
     dodge: clamp(a.dex * 0.006 + a.spd * 0.006 + a.exp * 0.008, 0, 0.5),
     crit: clamp(a.dex * 0.006 + a.exp * 0.013, 0, 0.6),
+    // Chance to raise the shield and block an incoming blow (needs a shield).
+    block: clamp(0.18 + a.dex * 0.011 + a.exp * 0.026 + a.con * 0.005, 0, 0.5),
     // Fraction of incoming damage shrugged off.
     toughness: clamp(a.con * 0.004 + a.exp * 0.006, 0, 0.5),
     build: (a.str + a.con) / 2, // used for subtle per-soldier body scale
