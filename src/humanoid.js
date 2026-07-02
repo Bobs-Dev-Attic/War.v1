@@ -130,6 +130,23 @@ export function buildHumanoid(cfg) {
     const beard = box(0.18, 0.14, 0.08, c.hair || 0x5a3a1e, 1);
     beard.position.set(0, 0.02, -0.1);
     head.add(beard);
+    if (c.horns) {
+      for (const sx of [-1, 1]) {
+        const horn = cyl(0.025, 0.08, 0.34, 0xe8dcc0, 6, 0.6);
+        horn.position.set(sx * 0.16, 0.34, 0);
+        horn.rotation.z = sx * -0.5;
+        head.add(horn);
+      }
+    }
+  } else if (c.helmet === 'romanLight') {
+    // Simple leather cap for skirmishers / archers.
+    const cap = new THREE.Mesh(
+      new THREE.SphereGeometry(0.16, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+      new THREE.MeshStandardMaterial({ color: 0x6a4a28, roughness: 0.9 })
+    );
+    cap.position.y = 0.24;
+    cap.castShadow = true;
+    head.add(cap);
   }
 
   // ---- Legs ----
@@ -281,9 +298,83 @@ function attachEquipment(c, arms) {
     club.rotation.x = -Math.PI / 2;
     arms.right.hand.add(club);
     arms.right.hand.userData.weaponTip = new THREE.Vector3(0, -0.7, 0);
+  } else if (c.weapon === 'spear' || c.weapon === 'pike' || c.weapon === 'javelin') {
+    const len = c.weapon === 'pike' ? 3.2 : c.weapon === 'javelin' ? 1.2 : 2.1;
+    const spear = new THREE.Group();
+    const shaft = cyl(0.028, 0.032, len, 0x6b4a26, 8, 0.85);
+    // Grip near the rear third so most of the shaft points forward.
+    shaft.position.y = -(len * 0.5 - 0.25);
+    spear.add(shaft);
+    const tip = new THREE.Mesh(
+      new THREE.ConeGeometry(0.05, 0.28, 8),
+      new THREE.MeshStandardMaterial({ color: 0xcdd2d8, metalness: 0.7, roughness: 0.3 })
+    );
+    tip.position.y = -(len - 0.25) + 0.02;
+    tip.rotation.x = Math.PI;
+    tip.castShadow = true;
+    spear.add(tip);
+    if (c.weapon !== 'javelin') {
+      const butt = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.14, 6),
+        new THREE.MeshStandardMaterial({ color: 0x9a8a5a, metalness: 0.5, roughness: 0.4 }));
+      butt.position.y = 0.25;
+      spear.add(butt);
+    }
+    spear.rotation.x = -Math.PI / 2;
+    arms.right.hand.add(spear);
+    arms.right.hand.userData.weaponTip = new THREE.Vector3(0, -(len - 0.25), 0);
+  } else if (c.weapon === 'greataxe') {
+    const axe = new THREE.Group();
+    const haft = cyl(0.045, 0.045, 1.05, 0x4a3018, 8, 0.9);
+    haft.position.y = -0.35;
+    axe.add(haft);
+    const headMat = new THREE.MeshStandardMaterial({ color: 0xaeb4ba, metalness: 0.8, roughness: 0.3 });
+    for (const s of [1, -1]) {                       // double-bitted head
+      const bl = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.07, 14, 1, false, -0.7, 1.4), headMat);
+      bl.rotation.x = Math.PI / 2;
+      bl.rotation.z = Math.PI / 2;
+      bl.position.set(s * 0.13, -0.82, 0);
+      bl.castShadow = true;
+      axe.add(bl);
+    }
+    axe.rotation.x = -Math.PI / 2;
+    arms.right.hand.add(axe);
+    arms.right.hand.userData.weaponTip = new THREE.Vector3(0, -0.92, 0);
+    arms.left.shoulder.userData.grip = { x: 0.7, z: -0.3 }; // two-handed
+    arms.left.elbow.userData.grip = { x: 1.0 };
+  } else if (c.weapon === 'maul') {
+    const maul = new THREE.Group();
+    const haft = cyl(0.05, 0.05, 1.0, 0x4a3018, 8, 0.95);
+    haft.position.y = -0.35;
+    maul.add(haft);
+    const headMat = new THREE.MeshStandardMaterial({ color: 0x6a6a6e, metalness: 0.6, roughness: 0.5 });
+    const head = box(0.26, 0.26, 0.4, 0x6a6a6e, 0.5, 0.6);
+    head.material = headMat;
+    head.position.y = -0.82;
+    head.castShadow = true;
+    maul.add(head);
+    maul.rotation.x = -Math.PI / 2;
+    arms.right.hand.add(maul);
+    arms.right.hand.userData.weaponTip = new THREE.Vector3(0, -0.82, 0);
+    arms.left.shoulder.userData.grip = { x: 0.7, z: -0.3 };
+    arms.left.elbow.userData.grip = { x: 1.0 };
+  } else if (c.weapon === 'bow') {
+    // Bow rides in the LEFT hand; the right hand draws the string.
+    const bow = new THREE.Group();
+    const limb = new THREE.Mesh(
+      new THREE.TorusGeometry(0.34, 0.02, 6, 16, Math.PI * 1.1),
+      new THREE.MeshStandardMaterial({ color: 0x7a5230, roughness: 0.7 })
+    );
+    limb.rotation.z = Math.PI / 2 - 0.55;
+    bow.add(limb);
+    const string = cyl(0.005, 0.005, 0.62, 0xe8e2d0, 4, 0.4);
+    string.position.z = 0.02;
+    bow.add(string);
+    bow.position.set(0, -0.05, 0.1);
+    arms.left.hand.add(bow);
+    arms.left.hand.userData.isBow = true;
   }
 
-  // Left hand = shield (Roman scutum) or bare.
+  // Left hand = shield, bow-grip or bare.
   if (c.shield === 'scutum') {
     const shield = new THREE.Group();
     const board = box(0.5, 0.72, 0.06, 0xb02a2a, 0.7);
@@ -321,6 +412,32 @@ function attachEquipment(c, arms) {
     arms.left.hand.add(shield);
     arms.left.shoulder.userData.hold = { x: 0.5, z: 0.25 };
     arms.left.elbow.userData.hold = { x: 1.1 };
+  } else if (c.shield === 'parma') {
+    const shield = new THREE.Group();
+    const board = cyl(0.24, 0.24, 0.05, 0xb02a2a, 16, 0.8);
+    board.rotation.x = Math.PI / 2;
+    shield.add(board);
+    const boss = new THREE.Mesh(
+      new THREE.SphereGeometry(0.06, 8, 6),
+      new THREE.MeshStandardMaterial({ color: 0xd9b45a, metalness: 0.6, roughness: 0.3 })
+    );
+    boss.position.z = 0.05;
+    shield.add(boss);
+    shield.position.set(0, -0.15, 0.14);
+    arms.left.hand.add(shield);
+    arms.left.shoulder.userData.hold = { x: 0.5, z: 0.25 };
+    arms.left.elbow.userData.hold = { x: 1.1 };
+  }
+
+  // Left-arm rest posture when there is no shield.
+  if (arms.left.hand.userData.isBow) {
+    // Extend the bow arm forward.
+    arms.left.shoulder.userData.hold = { x: 1.15, z: 0.1 };
+    arms.left.elbow.userData.hold = { x: 0.15 };
+  } else if (arms.left.shoulder.userData.grip) {
+    // Two-handed weapon: bring the off hand across to grip the haft.
+    arms.left.shoulder.userData.hold = arms.left.shoulder.userData.grip;
+    arms.left.elbow.userData.hold = arms.left.elbow.userData.grip;
   }
 }
 
