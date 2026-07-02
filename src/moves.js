@@ -35,14 +35,16 @@ function kf(t, frames) {
 const smooth = (t) => t * t * (3 - 2 * t);
 
 // ---- Attack poses --------------------------------------------------------
-// Forward is local -z; negative shoulder.x swings the weapon arm forward.
+// Forward is local -z. Positive shoulder.x / elbow.x reach the arm FORWARD
+// toward the enemy; negatives cock it back. Strikes must land forward.
 
 function thrustPose(j, t) {
-  const sh = kf(t, [[0, 0.15], [0.28, 0.55], [0.5, -1.15], [0.62, -1.2], [1, 0.15]]);
-  const el = kf(t, [[0, 0.25], [0.28, 1.5], [0.5, 0.15], [0.62, 0.2], [1, 0.25]]);
-  const twist = kf(t, [[0, 0], [0.28, 0.35], [0.55, -0.15], [1, 0]]);
-  const lunge = kf(t, [[0, 0], [0.5, 0.55], [0.66, 0.5], [1, 0]]);
-  const lean = kf(t, [[0, -0.05], [0.5, -0.22], [1, -0.05]]);
+  // Cock the arm back, then drive the point straight forward.
+  const sh = kf(t, [[0, 0.15], [0.26, -0.2], [0.48, 0.9], [0.6, 1.0], [1, 0.15]]);
+  const el = kf(t, [[0, 0.25], [0.26, 1.6], [0.48, 0.3], [0.6, 0.2], [1, 0.25]]);
+  const twist = kf(t, [[0, 0], [0.26, -0.25], [0.5, 0.2], [1, 0]]);
+  const lunge = kf(t, [[0, 0], [0.48, 0.55], [0.62, 0.5], [1, 0]]);
+  const lean = kf(t, [[0, -0.05], [0.48, -0.22], [1, -0.05]]);
   j.rightShoulder.rotation.x = sh;
   j.rightElbow.rotation.x = el;
   j.chest.rotation.y = twist;
@@ -53,10 +55,11 @@ function thrustPose(j, t) {
 }
 
 function overheadPose(j, t) {
-  const sh = kf(t, [[0, 0.15], [0.3, -2.4], [0.46, -2.6], [0.64, 0.9], [0.8, 0.7], [1, 0.15]]);
-  const el = kf(t, [[0, 0.25], [0.3, 1.4], [0.46, 1.2], [0.64, 0.2], [1, 0.25]]);
-  const lean = kf(t, [[0, -0.05], [0.3, -0.25], [0.46, -0.3], [0.64, 0.28], [1, -0.05]]);
-  const step = kf(t, [[0, 0], [0.55, 0.5], [0.72, 0.45], [1, 0]]);
+  // Raise the weapon overhead, then chop down and forward onto the foe.
+  const sh = kf(t, [[0, 0.15], [0.32, 1.85], [0.46, 1.95], [0.64, 0.35], [0.82, 0.45], [1, 0.15]]);
+  const el = kf(t, [[0, 0.25], [0.32, 1.2], [0.46, 1.0], [0.64, 0.3], [1, 0.25]]);
+  const lean = kf(t, [[0, -0.05], [0.32, 0.14], [0.46, 0.16], [0.64, -0.28], [1, -0.05]]);
+  const step = kf(t, [[0, 0], [0.6, 0.5], [0.76, 0.45], [1, 0]]);
   j.rightShoulder.rotation.x = sh;
   j.rightElbow.rotation.x = el;
   j.chest.rotation.x = lean;
@@ -66,12 +69,13 @@ function overheadPose(j, t) {
 }
 
 function slashPose(j, t) {
-  const shy = kf(t, [[0, 0], [0.28, 0.7], [0.55, -0.95], [0.7, -0.85], [1, 0]]);
-  const shx = kf(t, [[0, 0.15], [0.3, -0.5], [0.55, -0.6], [1, 0.15]]);
-  const el = kf(t, [[0, 0.25], [0.28, 0.6], [0.55, 0.35], [1, 0.25]]);
+  // Weapon raised out front, sweeping horizontally across the body.
+  const shx = kf(t, [[0, 0.15], [0.28, 0.75], [0.5, 0.6], [0.7, 0.5], [1, 0.15]]);
+  const shy = kf(t, [[0, 0], [0.28, 0.85], [0.55, -0.9], [0.72, -0.8], [1, 0]]);
+  const el = kf(t, [[0, 0.25], [0.3, 0.5], [0.55, 0.3], [1, 0.25]]);
   const twist = kf(t, [[0, 0], [0.28, 0.45], [0.6, -0.45], [1, 0]]);
-  j.rightShoulder.rotation.y = shy;
   j.rightShoulder.rotation.x = shx;
+  j.rightShoulder.rotation.y = shy;
   j.rightElbow.rotation.x = el;
   j.chest.rotation.y = twist;
   j.leftKnee.rotation.x = -0.15;
@@ -92,11 +96,11 @@ function spinPose(j, t, u) {
 }
 
 function bashPose(j, t) {
-  const push = kf(t, [[0, 0], [0.25, 0.2], [0.42, 1.0], [0.55, 0.9], [1, 0]]);
-  j.leftShoulder.rotation.x = -push;              // shield rams forward
+  const push = kf(t, [[0, 0], [0.25, 0.25], [0.42, 1.05], [0.55, 0.95], [1, 0]]);
+  j.leftShoulder.rotation.x = push;               // shield rams forward
   j.leftShoulder.rotation.z = 0.15;
-  j.leftElbow.rotation.x = 1.0 - push * 0.6;
-  j.rightShoulder.rotation.x = 0.5;               // weapon cocked back
+  j.leftElbow.rotation.x = 1.0;
+  j.rightShoulder.rotation.x = -0.4;              // weapon cocked back
   j.rightElbow.rotation.x = 1.2;
   const step = kf(t, [[0, 0], [0.42, 0.45], [0.55, 0.4], [1, 0]]);
   j.leftHip.rotation.x = step;
@@ -108,15 +112,15 @@ function bashPose(j, t) {
 
 function blockPose(j, t) {
   const raise = kf(t, [[0, 0], [0.15, 1], [0.7, 1], [1, 0]]);
-  j.leftShoulder.rotation.x = -0.1 - raise * 0.35; // shield up in front
-  j.leftShoulder.rotation.z = 0.2 + raise * 0.35;
-  j.leftElbow.rotation.x = 1.1 + raise * 0.5;
-  j.rightShoulder.rotation.x = 0.4;                // weapon tucked
+  j.leftShoulder.rotation.x = 0.5 + raise * 0.4;   // shield up & forward in guard
+  j.leftShoulder.rotation.z = 0.2 + raise * 0.3;
+  j.leftElbow.rotation.x = 1.1 + raise * 0.4;
+  j.rightShoulder.rotation.x = -0.3;               // weapon tucked behind the shield
   j.rightElbow.rotation.x = 1.0;
   j.leftKnee.rotation.x = -0.25 * raise - 0.1;     // brace low
   j.rightKnee.rotation.x = -0.25 * raise - 0.1;
   j.body.position.y = -0.08 * raise;
-  j.chest.rotation.x = 0.08 * raise;               // lean into the shield
+  j.chest.rotation.x = 0.08 * raise;               // settle behind the shield
 }
 
 function dodgePose(side) {
