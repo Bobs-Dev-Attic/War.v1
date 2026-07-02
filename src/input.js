@@ -147,8 +147,8 @@ export class Input {
     const unit = this._hovered;
     const u = this._pickUnit(e.clientX, e.clientY);
     if (unit && unit !== u) unit.setHovered(false);
-    if (u && u.faction === 'barbarian') { u.setHovered(true); this._hovered = u; this.canvas.style.cursor = 'crosshair'; }
-    else { this._hovered = null; this.canvas.style.cursor = u ? 'pointer' : 'default'; }
+    if (u && u.faction === 'barbarian') { u.setHovered(true); this._hovered = u; this.game.hoveredEnemy = u; this.canvas.style.cursor = 'crosshair'; }
+    else { this._hovered = null; this.game.hoveredEnemy = null; this.canvas.style.cursor = u ? 'pointer' : 'default'; }
   }
 
   _onWheel(e) {
