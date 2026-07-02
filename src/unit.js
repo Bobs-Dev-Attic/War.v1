@@ -1,12 +1,6 @@
 import * as THREE from 'three';
 import { buildHumanoid, ROMAN_CONFIG, BARBARIAN_CONFIG } from './humanoid.js';
-
-const UP = new THREE.Vector3(0, 1, 0);
-
-const STATS = {
-  roman: { hp: 100, dmg: 16, range: 1.7, speed: 3.2, attackTime: 1.0, turn: 9 },
-  barbarian: { hp: 125, dmg: 22, range: 1.8, speed: 3.0, attackTime: 1.25, turn: 7 },
-};
+import { rollAttributes, deriveStats, resolveAttack, pickName, rankFor } from './attributes.js';
 
 let _uid = 0;
 
@@ -14,14 +8,20 @@ export class Unit {
   constructor(faction, position) {
     this.id = _uid++;
     this.faction = faction;                 // 'roman' | 'barbarian'
-    const stats = STATS[faction];
-    this.maxHp = stats.hp;
-    this.hp = stats.hp;
-    this.dmg = stats.dmg * (0.9 + Math.random() * 0.2);
-    this.range = stats.range;
-    this.speed = stats.speed;
-    this.attackTime = stats.attackTime;
-    this.turnSpeed = stats.turn;
+
+    // Roll this soldier as an individual, then derive combat stats.
+    this.attrs = rollAttributes(faction);
+    this.stats = deriveStats(this.attrs);
+    this.name = pickName(faction);
+    this.rank = rankFor(faction, this.attrs.exp);
+
+    this.maxHp = this.stats.maxHp;
+    this.hp = this.maxHp;
+    this.range = faction === 'roman' ? 1.7 : 1.8;
+    this.speed = this.stats.speed;
+    this.attackTime = this.stats.attackTime;
+    this.turnSpeed = this.stats.turn;
+    this.stride = Math.random() * 10;       // gait cycle phase
 
     // Orders: 'aggressive' | 'hold' | 'retreat' | 'surrender'
     this.order = faction === 'roman' ? 'hold' : 'aggressive';
@@ -33,6 +33,9 @@ export class Unit {
     this.root = built.root;
     this.j = built.joints;
     this.root.position.copy(position);
+    // Subtle per-soldier build: the burly stand a touch taller and broader.
+    const scale = 0.94 + THREE.MathUtils.clamp((this.stats.build - 11) / 12, -0.06, 0.12);
+    this.root.scale.setScalar(scale);
     this.root.userData.unit = this;
     this.root.traverse((o) => { o.userData.unit = this; });
 
@@ -69,7 +72,7 @@ export class Unit {
     );
     const fill = new THREE.Mesh(
       new THREE.PlaneGeometry(0.86, 0.09),
-      new THREE.MeshBasicMaterial({ color: this.faction === 'roman' ? 0x4fd06a : 0xd0a24f })
+      new THREE.MeshBasicMaterial({ color: this.faction === 'roman' ? 0x4fd06a : 0xe0453a })
     );
     fill.position.z = 0.001;
     this._fillFullWidth = 0.86;
@@ -182,7 +185,8 @@ export class Unit {
     }
 
     if (desiredMove) {
-      this._moveToward(desiredMove, dt);
+      // Retreating soldiers run for their lives; ordered marches are a walk.
+      this._moveToward(desiredMove, dt, this.order === 'retreat' ? 'run' : 'walk');
     } else if (target) {
       const dist = this.position.distanceTo(target.position);
       this._faceTarget(target, dt);
@@ -191,7 +195,8 @@ export class Unit {
           // Hold position: don't chase, just idle & face foe.
           this._enterIdle(dt);
         } else {
-          this._stepToward(target.position, dt);
+          // Charge in at a run when far, settle to a walk closing the last step.
+          this._stepToward(target.position, dt, dist > this.range + 1.6 ? 'run' : 'walk');
         }
       } else {
         this._attack(dt, target, game);
@@ -205,7 +210,7 @@ export class Unit {
     this._billboard(game);
   }
 
-  _moveToward(pointV, dt) {
+  _moveToward(pointV, dt, gait = 'run') {
     const d = this._v2.copy(pointV).sub(this.position);
     d.y = 0;
     const dist = d.length();
@@ -213,15 +218,20 @@ export class Unit {
     d.normalize();
     this._desiredFacing = Math.atan2(d.x, d.z);
     this._turn(dt);
-    const step = Math.min(this.speed * dt, dist);
+    // Walking is a deliberate half-speed reposition; running is a full charge.
+    const speedMul = gait === 'run' ? 1 : 0.5;
+    const step = Math.min(this.speed * speedMul * dt, dist);
     this.position.addScaledVector(d, step);
     this.state = 'moving';
-    this.animT += dt * this.speed * 1.5;
-    this._animateWalk();
+    this.gait = gait;
+    const freq = gait === 'run' ? 11 : 7;
+    this.stride += dt * freq;
+    if (gait === 'run') this._animateRun();
+    else this._animateWalk();
   }
 
-  _stepToward(pointV, dt) {
-    this._moveToward(pointV, dt);
+  _stepToward(pointV, dt, gait = 'run') {
+    this._moveToward(pointV, dt, gait);
   }
 
   _attack(dt, target, game) {
@@ -238,8 +248,19 @@ export class Unit {
         this.didHit = true;
         if (this.position.distanceTo(target.position) <= this.range + 0.5) {
           const dir = Math.sign(target.position.x - this.position.x) || 1;
-          target.applyDamage(this.dmg, -dir);
-          game.spawnHitSpark(target.position, this.faction);
+          const res = resolveAttack(this, target);
+          if (res.hit) {
+            target.applyDamage(res.dmg, -dir);
+            game.spawnHitSpark(target.position, this.faction, res.crit);
+            game.floatingText(
+              target.position,
+              res.crit ? `CRIT ${Math.round(res.dmg)}` : `${Math.round(res.dmg)}`,
+              res.crit ? 0xffd24f : this.faction === 'roman' ? 0xffe0a0 : 0xff9a70,
+              res.crit ? 1.35 : 1
+            );
+          } else {
+            game.floatingText(target.position, 'miss', 0xbfc6cf, 0.75);
+          }
         }
       }
       if (p >= 1) {
@@ -336,23 +357,47 @@ export class Unit {
     this.j.rightShoulder.rotation.x = 0.2 + Math.sin(this.animT * 1.6 + 1) * 0.03;
   }
 
+  // Shared leg cycle. Forward is local -z, so a positive hip angle swings the
+  // foot forward; the knee must flex BACKWARD (negative rotation → shin toward
+  // +z), which is how a real knee bends. amp = stride length, flex = knee bend.
+  _legs(amp, flex, baseFlex) {
+    const t = this.stride;
+    const L = Math.sin(t);
+    const R = Math.sin(t + Math.PI);
+    this.j.leftHip.rotation.x = L * amp;
+    this.j.rightHip.rotation.x = R * amp;
+    // Knee bends most through the swing-forward phase (cos > 0) to clear ground.
+    this.j.leftKnee.rotation.x = -(baseFlex + Math.max(0, Math.cos(t)) * flex);
+    this.j.rightKnee.rotation.x = -(baseFlex + Math.max(0, Math.cos(t + Math.PI)) * flex);
+    return { L, R };
+  }
+
   _animateWalk() {
     this._rest();
-    const t = this.animT;
-    const swing = Math.sin(t * 2);
-    const swing2 = Math.sin(t * 2 + Math.PI);
-    // Legs
-    this.j.leftHip.rotation.x = swing * 0.7;
-    this.j.rightHip.rotation.x = swing2 * 0.7;
-    this.j.leftKnee.rotation.x = Math.max(0, -swing) * 0.9 + 0.1;
-    this.j.rightKnee.rotation.x = Math.max(0, -swing2) * 0.9 + 0.1;
-    // Body bob & lean into the march
-    this.j.body.position.y = Math.abs(Math.sin(t)) * 0.06;
-    this.j.chest.rotation.x = 0.12;
-    // Weapon arm counter-swings; shield arm stays in guard.
-    this.j.rightShoulder.rotation.x = 0.2 + swing * 0.35;
+    const t = this.stride;
+    const { L } = this._legs(0.5, 0.9, 0.1);
+    // Gentle bob and a slight forward lean into the march (-x leans toward -z).
+    this.j.body.position.y = Math.abs(Math.sin(t)) * 0.05;
+    this.j.chest.rotation.x = -0.06;
+    // Weapon arm counter-swings the left leg; shield stays in guard.
+    this.j.rightShoulder.rotation.x = 0.2 + L * 0.3;
     this.j.rightElbow.rotation.x = 0.5;
     this._applyHold();
+  }
+
+  _animateRun() {
+    this._rest();
+    const t = this.stride;
+    const { L, R } = this._legs(0.95, 1.5, 0.28);
+    // Bigger bound, driving forward lean, hard arm pump.
+    this.j.body.position.y = Math.abs(Math.sin(t)) * 0.12 + 0.03;
+    this.j.chest.rotation.x = -0.26;
+    this.j.head.rotation.x = 0.12;                 // head up, eyes on the foe
+    this.j.rightShoulder.rotation.x = 0.15 + L * 0.7;
+    this.j.rightElbow.rotation.x = 0.95;
+    this._applyHold();
+    this.j.leftShoulder.rotation.x += R * 0.3;     // shield arm pumps too
+    this.j.leftElbow.rotation.x += 0.15;
   }
 
   _animateAttack(p) {
@@ -465,8 +510,10 @@ export class Unit {
     this.fill.scale.x = Math.max(0.001, f);
     this.fill.position.x = -(this._fillFullWidth * (1 - f)) / 2;
     const c = this.fill.material.color;
-    if (this.faction === 'roman') c.setHSL(0.33 * f, 0.6, 0.55);
-    else c.setHSL(0.12, 0.6, 0.4 + 0.15 * f);
+    // Romans read green→red as they bleed; the enemy horde bars stay in a
+    // distinct crimson→dark-red band so the two sides are never confused.
+    if (this.faction === 'roman') c.setHSL(0.33 * f, 0.65, 0.5);
+    else c.setHSL(0.0, 0.7, 0.32 + 0.2 * f);
   }
 
   _billboard(game) {
@@ -477,7 +524,9 @@ export class Unit {
   }
 
   dispose(scene) {
-    scene.remove(this.root);
+    // Units live under game.group, so detach from whatever actually holds us.
+    if (this.root.parent) this.root.parent.remove(this.root);
+    else scene.remove(this.root);
     this.root.traverse((o) => {
       if (o.geometry) o.geometry.dispose();
       if (o.material) {

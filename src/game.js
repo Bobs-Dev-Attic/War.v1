@@ -9,6 +9,9 @@ export class Game {
     this.selected = new Set();
     this.sparks = [];
     this.markers = [];
+    this.floaters = [];
+    this.hoveredEnemy = null;
+    this._texCache = new Map();
     this.over = false;
 
     this.group = new THREE.Group();
@@ -148,22 +151,57 @@ export class Game {
   }
 
   // ---- Effects -----------------------------------------------------------
-  spawnHitSpark(pos, faction) {
-    const color = faction === 'roman' ? 0xffe08a : 0xff7a55;
-    for (let i = 0; i < 8; i++) {
+  spawnHitSpark(pos, faction, crit = false) {
+    const color = crit ? 0xffd24f : faction === 'roman' ? 0xffe08a : 0xff7a55;
+    const n = crit ? 16 : 8;
+    for (let i = 0; i < n; i++) {
       const m = new THREE.Mesh(
-        new THREE.SphereGeometry(0.045, 5, 4),
+        new THREE.SphereGeometry(crit ? 0.06 : 0.045, 5, 4),
         new THREE.MeshBasicMaterial({ color })
       );
       m.position.set(pos.x, 1.2 + Math.random() * 0.4, pos.z);
+      const spread = crit ? 6 : 4;
       const v = new THREE.Vector3(
-        (Math.random() - 0.5) * 4,
+        (Math.random() - 0.5) * spread,
         Math.random() * 3 + 1,
-        (Math.random() - 0.5) * 4
+        (Math.random() - 0.5) * spread
       );
       this.sparks.push({ mesh: m, v, life: 0.5 });
       this.group.add(m);
     }
+  }
+
+  // Floating combat text (damage numbers, CRIT, miss) that rises and fades.
+  floatingText(pos, text, color, scale = 1) {
+    const tex = this._textTexture(text, color);
+    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+    const sp = new THREE.Sprite(mat);
+    sp.position.set(pos.x + (Math.random() - 0.5) * 0.3, 2.3, pos.z);
+    sp.scale.set(1.5 * scale, 0.75 * scale, 1);
+    sp.renderOrder = 1000;
+    this.group.add(sp);
+    this.floaters.push({ sp, life: 0.9, vy: 1.3 });
+  }
+
+  _textTexture(text, color) {
+    const key = `${text}|${color}`;
+    if (this._texCache.has(key)) return this._texCache.get(key);
+    const canvas = document.createElement('canvas');
+    canvas.width = 256; canvas.height = 128;
+    const ctx = canvas.getContext('2d');
+    const css = '#' + (color >>> 0).toString(16).padStart(6, '0').slice(-6);
+    ctx.font = 'bold 72px "Trebuchet MS", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineWidth = 8;
+    ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+    ctx.strokeText(text, 128, 64);
+    ctx.fillStyle = css;
+    ctx.fillText(text, 128, 64);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    this._texCache.set(key, tex);
+    return tex;
   }
 
   _spawnMarker(point, color) {
@@ -203,6 +241,17 @@ export class Game {
         this.markers.splice(i, 1);
       }
     }
+    for (let i = this.floaters.length - 1; i >= 0; i--) {
+      const f = this.floaters[i];
+      f.life -= dt;
+      f.sp.position.y += f.vy * dt;
+      f.sp.material.opacity = Math.max(0, Math.min(1, f.life / 0.5));
+      if (f.life <= 0) {
+        this.group.remove(f.sp);
+        f.sp.material.dispose();
+        this.floaters.splice(i, 1);
+      }
+    }
   }
 
   // ---- Main tick ---------------------------------------------------------
@@ -210,7 +259,21 @@ export class Game {
     for (const u of this.units) u.update(dt, this);
     this._updateEffects(dt);
     this.ui.updateTally(this);
+    this.ui.updateStats(this._inspectUnit());
     if (!this.over) this._checkOutcome();
+  }
+
+  // Which soldier's dossier to show: a lone selected legionary, or an
+  // enemy the cursor is hovering.
+  _inspectUnit() {
+    if (this.selected.size === 1) {
+      const u = [...this.selected][0];
+      if (u.alive && !u.hasSurrendered) return u;
+    }
+    if (this.hoveredEnemy && this.hoveredEnemy.alive && !this.hoveredEnemy.hasSurrendered) {
+      return this.hoveredEnemy;
+    }
+    return null;
   }
 
   _checkOutcome() {
@@ -237,11 +300,14 @@ export class Game {
     this.selected.clear();
     this.sparks = [];
     this.markers = [];
+    this.floaters = [];
+    this.hoveredEnemy = null;
     this.over = false;
     this.group = new THREE.Group();
     this.world.scene.add(this.group);
     this.spawnArmies();
     this.ui.hideOutcome();
     this.ui.updateSelectionInfo(this);
+    this.ui.updateStats(null);
   }
 }
