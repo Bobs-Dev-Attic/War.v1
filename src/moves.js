@@ -148,6 +148,55 @@ function flinchPose(j, t) {
   j.rightShoulder.rotation.x = 0.15 + 0.3 * s;
 }
 
+// ---- Reach & ranged poses (spear / pike / bow / javelin) -----------------
+// One-handed on the weapon arm, so shield-bearers keep their guard.
+
+function spearThrustPose(j, t) {
+  const sh = kf(t, [[0, 0.15], [0.28, -0.15], [0.5, 0.85], [0.62, 0.95], [1, 0.15]]);
+  const el = kf(t, [[0, 0.25], [0.28, 1.3], [0.5, 0.3], [0.62, 0.25], [1, 0.25]]);
+  const lunge = kf(t, [[0, 0], [0.5, 0.55], [0.64, 0.5], [1, 0]]);
+  j.rightShoulder.rotation.x = sh;
+  j.rightElbow.rotation.x = el;
+  j.chest.rotation.x = -0.14 * Math.sin(t * Math.PI);
+  j.leftHip.rotation.x = lunge;
+  j.leftKnee.rotation.x = -Math.max(0, lunge) * 1.05;
+  j.rightHip.rotation.x = -lunge * 0.4;
+}
+
+function pikeThrustPose(j, t) {
+  // Braced, measured lunge — the long shaft does the reaching.
+  const sh = kf(t, [[0, 0.1], [0.35, -0.05], [0.55, 0.6], [0.68, 0.7], [1, 0.1]]);
+  const el = kf(t, [[0, 0.4], [0.35, 0.9], [0.55, 0.35], [0.68, 0.3], [1, 0.4]]);
+  const brace = kf(t, [[0, 0], [0.5, 0.35], [0.66, 0.3], [1, 0]]);
+  j.rightShoulder.rotation.x = sh;
+  j.rightElbow.rotation.x = el;
+  j.leftHip.rotation.x = brace * 0.4;
+  j.leftKnee.rotation.x = -0.2;
+  j.rightKnee.rotation.x = -0.26;
+  j.chest.rotation.x = -0.1;
+}
+
+function shootPose(j, t) {
+  // Bow arm (left) stays extended via its hold; the right hand draws & looses.
+  const draw = kf(t, [[0, 0], [0.5, 1], [0.58, 1], [0.68, 0], [1, 0]]);
+  j.rightShoulder.rotation.x = 0.6 - draw * 0.3;
+  j.rightShoulder.rotation.z = -0.3 - draw * 0.5;
+  j.rightElbow.rotation.x = 0.3 + draw * 1.5;
+  j.chest.rotation.y = -0.15 * draw;
+  j.head.rotation.y = 0.1 * draw;
+}
+
+function throwPose(j, t) {
+  const wind = kf(t, [[0, 0.15], [0.4, -1.7], [0.5, -1.8], [0.62, 1.1], [0.78, 0.8], [1, 0.15]]);
+  const el = kf(t, [[0, 0.25], [0.4, 1.4], [0.5, 1.3], [0.62, 0.3], [1, 0.25]]);
+  const step = kf(t, [[0, 0], [0.55, 0.45], [0.7, 0.4], [1, 0]]);
+  j.rightShoulder.rotation.x = wind;
+  j.rightElbow.rotation.x = el;
+  j.leftHip.rotation.x = step;
+  j.leftKnee.rotation.x = -Math.max(0, step) * 0.9;
+  j.chest.rotation.x = kf(t, [[0, -0.05], [0.4, 0.15], [0.62, -0.25], [1, -0.05]]);
+}
+
 // ---- Move table ----------------------------------------------------------
 export const MOVES = {
   thrust:     { type: 'attack', dur: 0.65, hit: [0.42, 0.55], dmgMul: 1.0, reach: 1.9, pose: thrustPose },
@@ -155,6 +204,10 @@ export const MOVES = {
   slash:      { type: 'attack', dur: 0.72, hit: [0.4, 0.62], dmgMul: 1.1, reach: 1.9, pose: slashPose },
   spin:       { type: 'attack', dur: 1.0, hit: [0.3, 0.75], dmgMul: 1.2, reach: 2.0, spin: true, aoe: true, pose: spinPose },
   shieldBash: { type: 'attack', dur: 0.6, hit: [0.35, 0.5], dmgMul: 0.55, reach: 1.6, stagger: true, pose: bashPose },
+  spearThrust: { type: 'attack', dur: 0.75, hit: [0.46, 0.6], dmgMul: 1.0, reach: 2.6, pose: spearThrustPose },
+  pikeThrust:  { type: 'attack', dur: 1.0, hit: [0.5, 0.66], dmgMul: 1.1, reach: 3.4, pose: pikeThrustPose },
+  shoot:       { type: 'ranged', dur: 0.9, release: 0.6, projectile: 'arrow', pose: shootPose },
+  throwJavelin: { type: 'ranged', dur: 0.72, release: 0.55, projectile: 'javelin', pose: throwPose },
   block:      { type: 'defense', dur: 0.55, pose: blockPose },
   dodgeL:     { type: 'defense', dur: 0.5, pose: dodgePose(1) },
   dodgeR:     { type: 'defense', dur: 0.5, pose: dodgePose(-1) },

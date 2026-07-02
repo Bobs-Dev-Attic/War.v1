@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Unit } from './unit.js';
+import { DEFAULT_ARMY, composeArmy, UNIT_TYPES } from './unitTypes.js';
 
 export class Game {
   constructor(world, ui) {
@@ -10,9 +11,16 @@ export class Game {
     this.sparks = [];
     this.markers = [];
     this.floaters = [];
+    this.projectiles = [];
     this.hoveredEnemy = null;
     this._texCache = new Map();
     this.over = false;
+
+    // Current battle composition (editable via the New Battle screen).
+    this.composition = {
+      roman: { ...DEFAULT_ARMY.roman },
+      barbarian: { ...DEFAULT_ARMY.barbarian },
+    };
 
     this.group = new THREE.Group();
     world.scene.add(this.group);
@@ -24,23 +32,34 @@ export class Game {
   }
 
   spawnArmies() {
-    // Romans form up on the south edge, barbarians charge from the north.
-    const romanLine = 8;
-    const hordeLine = -8;
-    const n = 4;
-    for (let i = 0; i < n; i++) {
-      const x = (i - (n - 1) / 2) * 2.4;
-      this._add('roman', new THREE.Vector3(x, 0, romanLine + (i % 2) * 1.2));
-    }
-    for (let i = 0; i < n; i++) {
-      const x = (i - (n - 1) / 2) * 2.6;
-      this._add('barbarian', new THREE.Vector3(x, 0, hordeLine - (i % 2) * 1.2));
-    }
+    // Romans form up on the south edge (defenders); the horde masses to the north.
+    this._formation(composeArmy(this.composition.roman), 'roman', 9, 2.2);
+    this._formation(composeArmy(this.composition.barbarian), 'barbarian', -9, 2.4);
     this.ui.updateTally(this);
   }
 
-  _add(faction, pos) {
-    const u = new Unit(faction, pos);
+  _formation(typeKeys, faction, line, spacing) {
+    // Lay a squad out in tidy rows facing the enemy; ranged units sit at the back.
+    const order = typeKeys.slice().sort((a, b) => this._rankHint(a) - this._rankHint(b));
+    const perRow = Math.min(6, Math.max(3, Math.ceil(Math.sqrt(order.length) * 1.6)));
+    const dir = faction === 'roman' ? 1 : -1;
+    order.forEach((key, i) => {
+      const row = Math.floor(i / perRow);
+      const col = i % perRow;
+      const rowCount = Math.min(perRow, order.length - row * perRow);
+      const x = (col - (rowCount - 1) / 2) * spacing;
+      const z = line + dir * row * 2.2;
+      this._add(faction, new THREE.Vector3(x, 0, z), key);
+    });
+  }
+
+  // Melee/pike up front (row 0, nearest the foe), ranged at the rear.
+  _rankHint(typeKey) {
+    return UNIT_TYPES[typeKey].role === 'ranged' ? 1 : 0;
+  }
+
+  _add(faction, pos, typeKey) {
+    const u = new Unit(faction, pos, typeKey);
     this.units.push(u);
     this.group.add(u.root);
     return u;
@@ -215,6 +234,85 @@ export class Game {
     return tex;
   }
 
+  // ---- Projectiles (arrows & javelins) ----------------------------------
+  spawnProjectile(shooter, target, kind, dmg) {
+    const g = new THREE.Group();
+    if (kind === 'arrow') {
+      const shaft = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.015, 0.015, 0.7, 5),
+        new THREE.MeshStandardMaterial({ color: 0x8a6a3a, roughness: 0.8 })
+      );
+      shaft.rotation.z = Math.PI / 2;
+      g.add(shaft);
+      const head = new THREE.Mesh(
+        new THREE.ConeGeometry(0.03, 0.1, 5),
+        new THREE.MeshStandardMaterial({ color: 0xcdd2d8, metalness: 0.6, roughness: 0.4 })
+      );
+      head.rotation.z = -Math.PI / 2;
+      head.position.x = 0.4;
+      g.add(head);
+    } else {
+      const shaft = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.022, 0.022, 1.0, 6),
+        new THREE.MeshStandardMaterial({ color: 0x6b4a26, roughness: 0.85 })
+      );
+      shaft.rotation.z = Math.PI / 2;
+      g.add(shaft);
+      const head = new THREE.Mesh(
+        new THREE.ConeGeometry(0.04, 0.16, 6),
+        new THREE.MeshStandardMaterial({ color: 0xcdd2d8, metalness: 0.6, roughness: 0.4 })
+      );
+      head.rotation.z = -Math.PI / 2;
+      head.position.x = 0.55;
+      g.add(head);
+    }
+    // Launch from the shooter's shoulder height toward the target.
+    const from = new THREE.Vector3(shooter.position.x, 1.4, shooter.position.z);
+    g.position.copy(from);
+    g.castShadow = true;
+    this.group.add(g);
+    this.projectiles.push({
+      mesh: g, target, shooter, dmg,
+      speed: kind === 'arrow' ? 22 : 15,
+      life: 3,
+    });
+  }
+
+  _updateProjectiles(dt) {
+    const tmp = new THREE.Vector3();
+    for (let i = this.projectiles.length - 1; i >= 0; i--) {
+      const p = this.projectiles[i];
+      p.life -= dt;
+      const tgt = p.target;
+      const alive = tgt && tgt.alive && !tgt.hasSurrendered;
+      // Aim at the target's torso; if it's gone, keep flying straight.
+      const aim = alive ? tmp.set(tgt.position.x, 1.2, tgt.position.z) : null;
+      if (aim) {
+        const dir = aim.clone().sub(p.mesh.position);
+        const dist = dir.length();
+        dir.normalize();
+        p.mesh.position.addScaledVector(dir, Math.min(p.speed * dt, dist));
+        p.mesh.rotation.y = Math.atan2(dir.x, dir.z) - Math.PI / 2;
+        p.mesh.rotation.z = Math.asin(THREE.MathUtils.clamp(dir.y, -1, 1));
+        if (dist < 0.6) {
+          tgt.receiveRanged(p.shooter, p.dmg, this);
+          this._removeProjectile(i);
+          continue;
+        }
+      } else {
+        p.mesh.position.x += p.mesh.position.x * 0; // hold; just expire
+      }
+      if (p.life <= 0) this._removeProjectile(i);
+    }
+  }
+
+  _removeProjectile(i) {
+    const p = this.projectiles[i];
+    this.group.remove(p.mesh);
+    p.mesh.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
+    this.projectiles.splice(i, 1);
+  }
+
   _spawnMarker(point, color) {
     const m = new THREE.Mesh(
       this._moveMarkerGeo,
@@ -269,6 +367,7 @@ export class Game {
   update(dt) {
     for (const u of this.units) u.update(dt, this);
     this._resolveCollisions();
+    this._updateProjectiles(dt);
     this._updateEffects(dt);
     this.ui.updateTally(this);
     this.ui.updateStats(this._inspectUnit());
@@ -322,9 +421,11 @@ export class Game {
     const romansSurrendered = this.romans.every((u) => !u.alive || u.hasSurrendered);
     if (horde === 0 && romans > 0) {
       this.over = true;
+      this._celebrate('roman');
       this.ui.showOutcome(true, 'The horde is broken. Rome stands triumphant!');
     } else if (romans === 0) {
       this.over = true;
+      if (this.livingHorde().length > 0) this._celebrate('barbarian');
       const msg = romansSurrendered && this.romans.some((u) => u.hasSurrendered)
         ? 'The legion has laid down its arms. The field is lost.'
         : 'The legion is overrun. The eagles have fallen.';
@@ -332,15 +433,34 @@ export class Game {
     }
   }
 
+  // The victors raise their arms and cheer.
+  _celebrate(faction) {
+    for (let i = this.projectiles.length - 1; i >= 0; i--) this._removeProjectile(i);
+    for (const u of this.units) {
+      if (u.faction === faction && u.alive && !u.hasSurrendered) u.celebrate();
+    }
+  }
+
+  // Start a fresh battle with the given composition (from the setup screen).
+  startBattle(composition) {
+    if (composition) {
+      this.composition = {
+        roman: { ...composition.roman },
+        barbarian: { ...composition.barbarian },
+      };
+    }
+    this.reset();
+  }
+
   reset() {
     for (const u of this.units) u.dispose(this.world.scene);
     this.world.scene.remove(this.group);
-    for (const s of this.sparks) this.group.remove(s.mesh);
     this.units = [];
     this.selected.clear();
     this.sparks = [];
     this.markers = [];
     this.floaters = [];
+    this.projectiles = [];
     this.hoveredEnemy = null;
     this.over = false;
     this.group = new THREE.Group();

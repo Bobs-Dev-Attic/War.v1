@@ -2,40 +2,63 @@ import * as THREE from 'three';
 import { buildHumanoid, ROMAN_CONFIG, BARBARIAN_CONFIG } from './humanoid.js';
 import { rollAttributes, deriveStats, pickName, rankFor } from './attributes.js';
 import { MOVES, pickCombo } from './moves.js';
+import { UNIT_TYPES } from './unitTypes.js';
 
 let _uid = 0;
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
 export class Unit {
-  constructor(faction, position) {
+  constructor(faction, position, typeKey) {
     this.id = _uid++;
     this.faction = faction;                 // 'roman' | 'barbarian'
+    this.typeKey = typeKey || (faction === 'roman' ? 'legionary' : 'warrior');
+    const type = UNIT_TYPES[this.typeKey];
+    this.type = type;
+    this.role = type.role;                   // 'melee' | 'pike' | 'ranged'
+    this.ranged = type.ranged || null;
 
     // Roll this soldier as an individual, then derive combat stats.
     this.attrs = rollAttributes(faction);
     this.stats = deriveStats(this.attrs);
     this.name = pickName(faction);
-    this.rank = rankFor(faction, this.attrs.exp);
+    this.rank = type.label;
+
+    // Apply the type's specialities on top of the rolled stats.
+    const m = type.stat || {};
+    if (m.hp) this.stats.maxHp = Math.round(this.stats.maxHp * m.hp);
+    if (m.dmg) this.stats.dmg *= m.dmg;
+    if (m.speed) this.stats.speed *= m.speed;
+    if (m.toughness) this.stats.toughness = clamp(this.stats.toughness + m.toughness, 0, 0.6);
+    if (m.block) this.stats.block = clamp(this.stats.block + m.block, 0, 0.7);
+    if (m.crit) this.stats.crit = clamp(this.stats.crit + m.crit, 0, 0.7);
+    if (m.dodge) this.stats.dodge = clamp(this.stats.dodge + m.dodge, 0, 0.6);
+    if (m.accuracy) this.stats.accuracy = clamp(this.stats.accuracy + m.accuracy, 0, 0.99);
+    this.elite = !!m.elite;
 
     this.maxHp = this.stats.maxHp;
     this.hp = this.maxHp;
-    this.range = faction === 'roman' ? 1.7 : 1.8;
+    this.range = type.reach;
     this.speed = this.stats.speed;
     this.attackTime = this.stats.attackTime;
     this.turnSpeed = this.stats.turn;
     this.stride = Math.random() * 10;       // gait cycle phase
+    this.comboList = type.combos;
+    this.rangedCooldown = Math.random() * 0.8;
 
     // Orders: 'aggressive' | 'hold' | 'retreat' | 'surrender'
     this.order = faction === 'roman' ? 'hold' : 'aggressive';
     this.moveTarget = null;                  // Vector3 (explicit move command)
     this.forcedTarget = null;                // Unit (focus-fire command)
 
-    const cfg = faction === 'roman' ? ROMAN_CONFIG : BARBARIAN_CONFIG;
+    const base = faction === 'roman' ? ROMAN_CONFIG : BARBARIAN_CONFIG;
+    const cfg = { ...base, ...type.cfg };
     const built = buildHumanoid(cfg);
     this.root = built.root;
     this.j = built.joints;
     this.root.position.copy(position);
-    // Subtle per-soldier build: the burly stand a touch taller and broader.
-    const scale = 0.94 + THREE.MathUtils.clamp((this.stats.build - 11) / 12, -0.06, 0.12);
+    // Subtle per-soldier build: the burly stand a touch taller and broader;
+    // elite champions (Praetorian, Chieftain) stand out a little more.
+    const scale = (0.94 + THREE.MathUtils.clamp((this.stats.build - 11) / 12, -0.06, 0.12)) * (this.elite ? 1.08 : 1);
     this.root.scale.setScalar(scale);
     this.radius = 0.5 * scale;               // body collider (no two share a tile)
     this.root.userData.unit = this;
@@ -48,7 +71,7 @@ export class Unit {
     this.state = 'idle';                     // idle | moving | attack | defense | flinch | dead
     this.animT = Math.random() * 10;         // idle/guard phase
     this.attackCooldown = 0;
-    this.hasShield = true;                   // both factions carry a shield
+    this.hasShield = type.cfg.shield != null; // archers/berserkers carry none
 
     // Combat move/combo state.
     this.move = null;                        // { def, name, t, hitDone } while a move plays
@@ -160,12 +183,22 @@ export class Unit {
     this.moveTarget = null;
   }
 
+  celebrate() {
+    if (!this.alive || this.hasSurrendered) return;
+    this.celebrating = true;
+    this.order = 'celebrate';
+    this.move = null;
+    this.combo = null;
+  }
+
   // ---- Per-frame update --------------------------------------------------
   update(dt, game) {
     if (this.state === 'dead') { this._animateDeath(dt); this._billboard(game); return; }
     if (this.hasSurrendered) { this._animateSurrender(dt, game); this._billboard(game); return; }
+    if (this.celebrating) { this._animateCelebrate(dt); this._clampToField(); this._billboard(game); return; }
 
     if (this.attackCooldown > 0) this.attackCooldown -= dt;
+    if (this.rangedCooldown > 0) this.rangedCooldown -= dt;
 
     // --- Combat action layer: a committed move (attack/defense/flinch) plays out.
     if (this.move) { this._advanceMove(dt, game); this._finishFrame(game); return; }
@@ -214,29 +247,77 @@ export class Unit {
       this._moveToward(desiredMove, dt, this.order === 'retreat' ? 'run' : 'walk');
     } else if (target) {
       const dist = this.position.distanceTo(target.position);
-      this._faceTarget(target, dt);
-      if (dist > this.range) {
-        if (this.order === 'hold' && dist > this.range + 0.4) {
-          this._enterIdle(dt);                // hold position, face the foe
-        } else {
-          // Charge in at a run when far, settle to a walk closing the last step.
-          this._stepToward(target.position, dt, dist > this.range + 1.6 ? 'run' : 'walk');
-        }
-      } else if (this.attackCooldown <= 0) {
-        // In reach and ready — launch a fresh attack combo.
-        this._comboTarget = target;
-        this.combo = pickCombo(this.faction);
-        this.comboIndex = 0;
-        this.comboGap = 0;
-        this._animateGuard(dt);
+      if (this.role === 'ranged') {
+        this._rangedUpdate(dt, game, target, dist);
       } else {
-        this._animateGuard(dt);               // in reach, recovering — ready stance
+        this._meleeUpdate(dt, game, target, dist);
       }
     } else {
       this._enterIdle(dt);
     }
 
     this._finishFrame(game);
+  }
+
+  _meleeUpdate(dt, game, target, dist) {
+    this._faceTarget(target, dt);
+    if (dist > this.range) {
+      if (this.order === 'hold' && dist > this.range + 0.4) {
+        this._enterIdle(dt);                  // hold position, face the foe
+      } else {
+        this._stepToward(target.position, dt, dist > this.range + 1.6 ? 'run' : 'walk');
+      }
+    } else if (this.attackCooldown <= 0) {
+      this._launchCombo(target);
+      this._animateGuard(dt);
+    } else {
+      this._animateGuard(dt);                 // in reach, recovering — ready stance
+    }
+  }
+
+  // Archers & javelineers: keep to their band and loose volleys; flee if a foe
+  // closes, or draw a sidearm when cornered.
+  _rangedUpdate(dt, game, target, dist) {
+    const rg = this.ranged;
+    if (dist <= this.range && (rg.meleeFallback || dist < rg.min * 0.6)) {
+      // Enemy is on top of us — fight with the sidearm.
+      this._meleeUpdate(dt, game, target, dist);
+      return;
+    }
+    if (dist < rg.min) {
+      // Too close — backpedal to reopen the range.
+      const ax = this.position.x - target.position.x;
+      const az = this.position.z - target.position.z;
+      const len = Math.hypot(ax, az) || 1;
+      const flee = this._v.set(this.position.x + (ax / len) * 4, 0, this.position.z + (az / len) * 4);
+      this._moveToward(flee, dt, 'run');
+      return;
+    }
+    if (dist > rg.max) {
+      this._stepToward(target.position, dt, 'run'); // close to volley range
+      return;
+    }
+    // In the sweet spot — hold, aim and loose.
+    this._faceTarget(target, dt);
+    if (this.rangedCooldown <= 0 && this.attackCooldown <= 0) {
+      this._comboTarget = target;
+      this._startMove(rg.projectile === 'arrow' ? 'shoot' : 'throwJavelin');
+    } else {
+      this._animateIdle(dt);
+    }
+  }
+
+  _launchCombo(target) {
+    this._comboTarget = target;
+    this.combo = this._pickCombo();
+    this.comboIndex = 0;
+    this.comboGap = 0;
+  }
+
+  _pickCombo() {
+    const c = this.comboList;
+    if (c === 'roman' || c === 'barbarian') return pickCombo(c);
+    return c[Math.floor(Math.random() * c.length)].slice();
   }
 
   _finishFrame(game) {
@@ -271,12 +352,17 @@ export class Unit {
     if (m.type === 'attack' && !m.spin && target && target.alive && !target.hasSurrendered) {
       this._faceTarget(target, dt);
     }
+    if (m.type === 'ranged' && target && target.alive) this._faceTarget(target, dt);
     this._rest();
     m.pose(this.j, p, this);
     this._applyFacing();                       // picks up spinOffset if the pose set it
     if (m.type === 'attack' && !mv.hitDone && p >= m.hit[0]) {
       mv.hitDone = true;
       this._resolveHit(m, game);
+    }
+    if (m.type === 'ranged' && !mv.hitDone && p >= m.release) {
+      mv.hitDone = true;
+      this._fireProjectile(m, game);
     }
     if (mv.t >= m.dur) this._endMove();
   }
@@ -286,7 +372,10 @@ export class Unit {
     this.move = null;
     this.spinOffset = 0;
     this._applyFacing();
-    if (def.type === 'attack' && this.combo && this.comboIndex < this.combo.length) {
+    if (def.type === 'ranged') {
+      this.rangedCooldown = this.ranged.cooldown;
+      this.attackCooldown = 0.2;
+    } else if (def.type === 'attack' && this.combo && this.comboIndex < this.combo.length) {
       this.comboGap = 0.06 + Math.random() * 0.1;       // wind up the next strike
     } else if (def.type === 'attack') {
       this.combo = null;
@@ -295,6 +384,13 @@ export class Unit {
       this.attackCooldown = Math.max(this.attackCooldown, 0.12 + Math.random() * 0.18);
     }
     this.state = 'idle';
+  }
+
+  _fireProjectile(m, game) {
+    const tgt = this._comboTarget;
+    if (!tgt || !tgt.alive || tgt.hasSurrendered) return;
+    const dmg = this.stats.dmg * (this.ranged.dmgMul || 1);
+    game.spawnProjectile(this, tgt, m.projectile, dmg);
   }
 
   // Resolve an attack's impact frame against its target(s).
@@ -356,6 +452,26 @@ export class Unit {
       }
     }
     return 'hit';
+  }
+
+  // Resolve an arrow/javelin striking home.
+  receiveRanged(shooter, dmg, game) {
+    if (!this.alive || this.hasSurrendered) return;
+    if (this.hasShield && Math.random() < this.stats.block * 0.7) {
+      game.spawnHitSpark(this.position, this.faction, false);
+      game.floatingText(this.position, 'block', 0xdedede, 0.75);
+      return;
+    }
+    if (Math.random() < this.stats.dodge * 0.5) {
+      game.floatingText(this.position, 'dodge', 0x8fd0ff, 0.75);
+      return;
+    }
+    const finalDmg = dmg * (1 - this.stats.toughness) * (0.9 + Math.random() * 0.2);
+    const dir = Math.sign(this.position.x - shooter.position.x) || 1;
+    this.applyDamage(finalDmg, dir);
+    game.spawnHitSpark(this.position, shooter.faction, false);
+    game.floatingText(this.position, `${Math.round(finalDmg)}`,
+      shooter.faction === 'roman' ? 0xffe0a0 : 0xff9a70, 1);
   }
 
   _interruptWith(name, attacker) {
@@ -607,6 +723,24 @@ export class Unit {
     this.j.rightElbow.rotation.x = 0.6 * ease;
     this.j.leftShoulder.rotation.set(-2.4 * ease, -0.2 * ease, -0.3 * ease);
     this.j.leftElbow.rotation.x = 0.6 * ease;
+  }
+
+  // Victory! Thrust weapons skyward and hop with a war-cry.
+  _animateCelebrate(dt) {
+    this.animT += dt;
+    this._rest();
+    const t = this.animT;
+    const pump = (Math.sin(t * 4.5) + 1) / 2;               // 0..1 fist pump
+    const hop = Math.max(0, Math.sin(t * 4.5)) * 0.14;
+    this.j.rightShoulder.rotation.set(2.15 + pump * 0.55, 0, 0);  // weapon overhead
+    this.j.rightElbow.rotation.x = 0.3;
+    this.j.leftShoulder.rotation.set(1.95 + pump * 0.45, 0, 0.2);
+    this.j.leftElbow.rotation.x = 0.4;
+    this.j.body.position.y = hop;
+    this.j.leftKnee.rotation.x = -hop * 1.6;
+    this.j.rightKnee.rotation.x = -hop * 1.6;
+    this.j.head.rotation.x = -0.12;
+    this.j.chest.rotation.x = -0.05;
   }
 
   _updateHealthBar() {

@@ -11,9 +11,26 @@ dodges — while holding real weapons and shields.
 
 ## Gameplay
 
-You control the **Roman soldiers** (silver lorica, red-crested helmets, gladius +
-scutum). The **barbarians** (fur, horned helms, axes + round shields) charge
-automatically.
+You control the **Roman soldiers**; the **barbarian horde** charges automatically.
+Use the **top menu → New Battle** to muster custom armies (pick how many of each
+unit type per side), or **Rematch** to refight the same armies. When a battle ends
+you can **close the banner and watch the victors celebrate**, or start a new one.
+
+### Unit types
+
+Each side is a hierarchy of specialists with their own weapons, reach, stats and
+attack patterns (`src/unitTypes.js`):
+
+**Rome** — Legionary (gladius + scutum), Hastatus (spear), Triarius (long pike,
+braced wall), Sagittarius (bow, kites & volleys), Veles (javelin skirmisher),
+Praetorian (elite guard).
+
+**The Horde** — Warrior (axe + shield), Berserker (greataxe, no shield, huge
+damage), Marauder (great maul, staggering smashes), Raider (spear + shield),
+Hunter (bow), Chieftain (towering elite champion).
+
+Archers and javelineers fire **projectiles**, keep their distance and fall back
+when a foe closes; pikes and spears out-reach swords; shields catch arrows.
 
 ### Command menu
 
@@ -110,12 +127,13 @@ The repo is Vercel-ready (`vercel.json` sets the Vite framework preset).
 index.html          HUD, command menu, dossier, orientation guard
 src/main.js         bootstrap + render loop
 src/world.js        renderer, isometric camera, lights, terrain, scenery
-src/humanoid.js     articulated Roman / barbarian model builder
+src/humanoid.js     articulated model builder + all weapons/shields
+src/unitTypes.js    Roman & barbarian type hierarchy, army composition
 src/attributes.js   per-soldier attribute rolls + derived combat stats
 src/moves.js        move library (poses, impact windows) + combo assembler
-src/unit.js         combat state machine, move player, reactions, animation
-src/game.js         armies, AI, commands, selection, colliders, effects, win/lose
+src/unit.js         combat state machine, ranged/melee AI, reactions, animation
+src/game.js         armies, projectiles, commands, colliders, effects, win/celebrate
 src/input.js        camera rotate/zoom, selection, orders (mouse + touch)
-src/ui.js           HUD / dossier / command / outcome DOM controller
-src/styles.css      HUD styling
+src/ui.js           HUD, dossier, New Battle setup, outcome DOM controller
+src/styles.css      HUD & setup styling
 ```

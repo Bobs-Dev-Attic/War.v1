@@ -11,7 +11,7 @@ const game = new Game(world, ui);
 const input = new Input(world, game);
 
 ui.bindCommands((cmd) => game.command(cmd));
-ui.bindRestart(() => game.reset());
+ui.wire(game);
 ui.updateSelectionInfo(game);
 
 // Slow idle rotation of the camera until the player takes the reins.
