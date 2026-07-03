@@ -228,7 +228,11 @@ export class Unit {
     game.addBleeder(this, this.root.worldToLocal(wound.clone()), 3.5);
     // Consequences.
     if (part === 'head') { if (this.alive) this._die(dir, game); }
-    else if (part === 'leftLeg' || part === 'rightLeg') { this._fallAndCrawl(); }
+    else if (part === 'leftLeg' || part === 'rightLeg') {
+      // Losing one leg drops you to a crawl; losing the whole lower body kills.
+      if (!this.parts.leftLeg && !this.parts.rightLeg) this._die(dir, game);
+      else this._fallAndCrawl();
+    }
     else if (part === 'rightArm') { this.disarmed = true; this.move = null; this.combo = null; }
     else if (part === 'leftArm') { this.hasShield = false; }
   }
@@ -249,7 +253,7 @@ export class Unit {
   _fallAndCrawl() {
     if (this.crawling) return;
     this.crawling = true;
-    this.speed *= 0.35;
+    this.speed = 0.5;              // a slow, agonised drag
     this.move = null;
     this.combo = null;
   }
@@ -472,7 +476,7 @@ export class Unit {
         this.position.z += dz * inv * this.speed * dt;
       }
     }
-    this.stride += dt * 4;
+    this.stride += dt * 2.2;
     this.state = 'crawl';
     this._animateCrawl();
     this._clampToField();
