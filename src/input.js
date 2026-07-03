@@ -34,6 +34,8 @@ export class Input {
     window.addEventListener('pointermove', (e) => this._onMove(e));
     window.addEventListener('pointerup', (e) => this._onUp(e));
     c.addEventListener('wheel', (e) => this._onWheel(e), { passive: false });
+    // Stop the browser's middle-click autoscroll so wheel-press can pan.
+    c.addEventListener('mousedown', (e) => { if (e.button === 1) e.preventDefault(); });
     window.addEventListener('keydown', (e) => this._onKey(e));
     c.addEventListener('pointermove', (e) => this._hover(e));
   }
@@ -73,7 +75,13 @@ export class Input {
     this.down = { x: e.clientX, y: e.clientY, button: e.button };
     this.moved = false;
     this.dragging = true;
-    if (e.button === 0) {
+    if (e.button === 1) {
+      // Middle button (wheel press) → grab-pan across the field.
+      e.preventDefault();
+      this.mode = 'pan';
+      this.panAnchor = this._pickGround(e.clientX, e.clientY);
+      this.canvas.style.cursor = 'grabbing';
+    } else if (e.button === 0) {
       this.mode = e.shiftKey ? 'marquee' : 'rotate';
     } else {
       this.mode = 'command';
@@ -92,6 +100,15 @@ export class Input {
       this.world.updateCamera();
       this.down.x = e.clientX;
       this.down.y = e.clientY;
+    } else if (this.mode === 'pan') {
+      // Keep the grabbed ground point glued to the cursor.
+      const cur = this._pickGround(e.clientX, e.clientY);
+      if (this.panAnchor && cur) {
+        const t = this.world.target;
+        t.x = THREE.MathUtils.clamp(t.x + (this.panAnchor.x - cur.x), -30, 30);
+        t.z = THREE.MathUtils.clamp(t.z + (this.panAnchor.z - cur.z), -30, 30);
+        this.world.updateCamera();
+      }
     } else if (this.mode === 'marquee' && this.moved) {
       this._drawMarquee(this.down.x, this.down.y, e.clientX, e.clientY);
     }
@@ -110,6 +127,9 @@ export class Input {
       const maxY = Math.max(this.down.y, e.clientY) - r.top;
       this.game.selectInBox(minX, minY, maxX, maxY, this.world.camera, this.canvas);
       this.marquee.style.display = 'none';
+    } else if (this.mode === 'pan') {
+      this.canvas.style.cursor = 'default';
+      this.panAnchor = null;
     } else if (!this.moved) {
       this._click(e.clientX, e.clientY, e.button, e.shiftKey);
     }
