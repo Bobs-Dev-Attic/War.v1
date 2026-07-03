@@ -324,17 +324,6 @@ export class UI {
     g.beginPath(); g.moveTo(0, H / 2); g.lineTo(W, H / 2); g.stroke(); g.setLineDash([]);
     g.fillStyle = 'rgba(255,255,255,0.4)'; g.font = '10px sans-serif'; g.textAlign = 'center';
     g.fillText('▲ enemy', W / 2, 12);
-    // Forward-direction marker: soldiers always advance UP the map, toward the
-    // foe. A gold arrow up the left margin makes "forward" clear once formations
-    // are rotated.
-    const fx = 14;
-    g.strokeStyle = 'rgba(255,210,79,0.8)'; g.fillStyle = 'rgba(255,210,79,0.8)'; g.lineWidth = 2;
-    g.beginPath(); g.moveTo(fx, H * 0.72); g.lineTo(fx, H * 0.32); g.stroke();
-    g.beginPath(); g.moveTo(fx, H * 0.26); g.lineTo(fx - 5, H * 0.36); g.lineTo(fx + 5, H * 0.36); g.closePath(); g.fill();
-    g.lineWidth = 1;
-    g.save(); g.translate(fx + 11, H * 0.52); g.rotate(-Math.PI / 2);
-    g.fillStyle = 'rgba(255,235,190,0.7)'; g.font = 'bold 9px sans-serif'; g.textAlign = 'center';
-    g.fillText('FORWARD', 0, 0); g.restore();
     // Enemy groups (faint reference)
     const foe = side === 'roman' ? 'barbarian' : 'roman';
     for (const grp of this._setupGroups[foe]) {
@@ -354,8 +343,21 @@ export class UI {
         g.beginPath(); g.arc(x, y, 3.1, 0, 7); g.fill();
       }
       const [ax, ay] = this._w2m(side, grp.x, grp.z, W, H);
+      const ringR = on ? 9 : 7;
+      // Facing arrow: points where the group faces (toward the enemy when the
+      // formation is un-rotated), turning with the group's rotation.
+      const r = ((grp.rot || 0) * Math.PI) / 180;
+      const fdx = Math.sin(r), fdy = -Math.cos(r);          // forward on the canvas
+      const px = -fdy, py = fdx;                            // perpendicular (barbs)
+      const tipx = ax + fdx * (ringR + 9), tipy = ay + fdy * (ringR + 9);
+      g.strokeStyle = on ? '#ffe08a' : 'rgba(255,210,79,0.85)'; g.lineWidth = on ? 2.5 : 2;
+      g.beginPath(); g.moveTo(ax + fdx * ringR, ay + fdy * ringR); g.lineTo(tipx, tipy); g.stroke();
+      g.fillStyle = g.strokeStyle;
+      const bx = tipx - fdx * 6, by = tipy - fdy * 6, s = 4;
+      g.beginPath(); g.moveTo(tipx, tipy); g.lineTo(bx + px * s, by + py * s); g.lineTo(bx - px * s, by - py * s); g.closePath(); g.fill();
+      // Anchor ring + group number.
       g.strokeStyle = on ? '#ffe08a' : 'rgba(255,210,79,0.7)'; g.lineWidth = on ? 3 : 1.5;
-      g.beginPath(); g.arc(ax, ay, on ? 9 : 7, 0, 7); g.stroke();
+      g.beginPath(); g.arc(ax, ay, ringR, 0, 7); g.stroke();
       g.fillStyle = on ? 'rgba(255,210,79,0.35)' : 'rgba(255,210,79,0.15)'; g.fill();
       g.fillStyle = '#fff2d0'; g.font = 'bold 10px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
       g.fillText(String(i + 1), ax, ay);
