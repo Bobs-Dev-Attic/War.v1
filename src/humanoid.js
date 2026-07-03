@@ -370,6 +370,7 @@ function attachEquipment(c, arms) {
     string.position.z = 0.02;
     bow.add(string);
     bow.position.set(0, -0.05, 0.1);
+    bow.rotation.x = -1.15;              // stand it upright against the forward arm
     arms.left.hand.add(bow);
     arms.left.hand.userData.isBow = true;
   }

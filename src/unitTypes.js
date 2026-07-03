@@ -35,7 +35,7 @@ export const UNIT_TYPES = {
     faction: 'roman', label: 'Sagittarius', role: 'ranged', reach: 1.5, points: 1,
     cfg: { weapon: 'bow', shield: null, helmet: 'romanLight', torso: 0x8a6a3a, torsoMetal: 0.1, pauldrons: false, skirt: 0x6a4a28 },
     stat: { hp: 0.78 },
-    ranged: { min: 4.5, max: 16, cooldown: 1.8, projectile: 'arrow', dmgMul: 1.0 },
+    ranged: { min: 4.2, max: 16, cooldown: 1.8, projectile: 'arrow', dmgMul: 1.0 },
     combos: [['thrust']],
     desc: 'Auxiliary archer — deadly afar, frail up close.',
   },
@@ -82,7 +82,7 @@ export const UNIT_TYPES = {
   hunter: {
     faction: 'barbarian', label: 'Hunter', role: 'ranged', reach: 1.6, points: 1,
     cfg: { weapon: 'bow', shield: null, torso: 0x6a4a2a }, stat: { hp: 0.8, speed: 1.1 },
-    ranged: { min: 4, max: 13, cooldown: 1.7, projectile: 'arrow', dmgMul: 0.95 },
+    ranged: { min: 3.8, max: 13, cooldown: 1.7, projectile: 'arrow', dmgMul: 0.95 },
     combos: [['thrust']],
     desc: 'Tribal archer — harries from the treeline.',
   },
