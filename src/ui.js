@@ -57,6 +57,8 @@ export class UI {
     document.getElementById('cfg-random').addEventListener('click', () => this._randomizeSetup());
     document.getElementById('cfg-clear').addEventListener('click', () => this._clearSetup());
     document.getElementById('cfg-default').addEventListener('click', () => this._defaultSetup());
+    document.getElementById('save-btn').addEventListener('click', () => this._saveConfig());
+    document.getElementById('save-name').addEventListener('keydown', (e) => { if (e.key === 'Enter') this._saveConfig(); });
     document.getElementById('restart').addEventListener('click', () => game.reset());
     document.getElementById('new-battle').addEventListener('click', () => { this.hideOutcome(); this.openSetup(); });
     document.getElementById('outcome-close').addEventListener('click', () => this.hideOutcome());
@@ -105,6 +107,77 @@ export class UI {
     this._renderEnvChoices();
     this._renderSide('roman');
     this._renderSide('barbarian');
+    this._renderSaves();
+  }
+
+  // ---- Save / load battle configurations (localStorage) -----------------
+  _loadSaves() {
+    try { return JSON.parse(localStorage.getItem('warv1.saves') || '[]'); } catch { return []; }
+  }
+  _persistSaves(list) {
+    try { localStorage.setItem('warv1.saves', JSON.stringify(list)); } catch { /* storage full/blocked */ }
+  }
+
+  // Snapshot the current setup (environment + both armies' groups) under a name.
+  _saveConfig() {
+    const input = document.getElementById('save-name');
+    let name = (input.value || '').trim();
+    const list = this._loadSaves();
+    if (!name) name = 'Battle ' + (list.length + 1);
+    const strip = (gs) => gs.map(({ typeKey, count, formation, rot, x, z }) => ({ typeKey, count, formation, rot: rot || 0, x, z }));
+    const entry = {
+      name, env: this._setupEnv,
+      groups: { roman: strip(this._setupGroups.roman), barbarian: strip(this._setupGroups.barbarian) },
+    };
+    const i = list.findIndex((s) => s.name === name);   // overwrite same-name
+    if (i >= 0) list[i] = entry; else list.push(entry);
+    this._persistSaves(list);
+    input.value = '';
+    this._renderSaves();
+  }
+
+  _loadConfig(entry) {
+    if (ENV_KEYS.includes(entry.env)) this._setupEnv = entry.env;
+    const revive = (gs) => (gs || []).map((g) => ({ ...g, rot: g.rot || 0, id: ++this._gid }));
+    this._setupGroups = { roman: revive(entry.groups.roman), barbarian: revive(entry.groups.barbarian) };
+    this._roster = { roman: this._deriveRoster('roman'), barbarian: this._deriveRoster('barbarian') };
+    this._sel = { roman: null, barbarian: null };
+    this._renderAll();
+  }
+
+  _deleteConfig(name) {
+    this._persistSaves(this._loadSaves().filter((s) => s.name !== name));
+    this._renderSaves();
+  }
+
+  _renderSaves() {
+    const host = document.getElementById('saves-list');
+    if (!host) return;
+    host.innerHTML = '';
+    const list = this._loadSaves();
+    if (list.length === 0) {
+      host.innerHTML = '<div class="saves-empty">No saved battles yet — set one up and hit Save.</div>';
+      return;
+    }
+    for (const entry of list) {
+      const e = ENVIRONMENTS[entry.env];
+      const rn = (entry.groups.roman || []).reduce((a, g) => a + g.count, 0);
+      const bn = (entry.groups.barbarian || []).reduce((a, g) => a + g.count, 0);
+      const row = document.createElement('div');
+      row.className = 'save-item';
+      row.innerHTML =
+        `<span class="save-emoji">${e ? e.emoji : '⚔️'}</span>
+         <span class="save-info"><span class="save-title">${entry.name}</span>
+           <span class="save-sub">${e ? e.label : ''} · 🦅 ${rn} vs 🪓 ${bn}</span></span>`;
+      const load = document.createElement('button');
+      load.className = 'save-load'; load.textContent = 'Load';
+      load.addEventListener('click', () => this._loadConfig(entry));
+      const del = document.createElement('button');
+      del.className = 'save-del'; del.title = 'Delete'; del.textContent = '×';
+      del.addEventListener('click', () => this._deleteConfig(entry.name));
+      row.appendChild(load); row.appendChild(del);
+      host.appendChild(row);
+    }
   }
 
   _renderSide(side) {

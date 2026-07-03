@@ -207,6 +207,35 @@ body.title #topbar, body.title #commands, body.title #selection-info { display: 
 }
 .quick-btn:hover { background: rgba(217,180,90,.2); transform: translateY(-1px); }
 
+/* Save / load battle configs */
+.save-row { display: flex; gap: 8px; margin-top: 8px; }
+.save-name {
+  flex: 1; padding: 9px 12px; font-family: inherit; font-size: 13px; color: var(--parch);
+  background: rgba(0,0,0,.35); border: 1px solid rgba(217,180,90,.3); border-radius: 8px;
+}
+.save-name::placeholder { color: rgba(230,220,195,.4); }
+.save-btn { flex: 0 0 auto; padding-left: 16px; padding-right: 16px; }
+.saves-list { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; max-height: 168px; overflow-y: auto; }
+.saves-empty { font-size: 12px; opacity: .5; padding: 6px 2px; }
+.save-item {
+  display: grid; grid-template-columns: auto 1fr auto auto; gap: 10px; align-items: center;
+  padding: 8px 10px; border-radius: 9px; background: rgba(0,0,0,.28); border: 1px solid rgba(255,255,255,.07);
+}
+.save-emoji { font-size: 20px; line-height: 1; }
+.save-info { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.save-title { font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.save-sub { font-size: 11px; opacity: .6; }
+.save-load {
+  font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer; color: #1a1207; padding: 6px 14px;
+  background: linear-gradient(to bottom, var(--gold), #b8922f); border: none; border-radius: 7px;
+}
+.save-load:hover { filter: brightness(1.1); }
+.save-del {
+  width: 26px; height: 26px; font-size: 17px; line-height: 1; cursor: pointer; color: var(--parch);
+  background: rgba(255,255,255,.06); border: 1px solid rgba(212,58,58,.4); border-radius: 6px;
+}
+.save-del:hover { background: rgba(212,58,58,.3); }
+
 /* Army editor: unit list + deployment map */
 .army-editor { display: grid; grid-template-columns: 1fr 250px; gap: 16px; align-items: start; }
 .army-types { background: rgba(0,0,0,.22); border: 1px solid rgba(255,255,255,.06); border-radius: 12px; padding: 12px 14px; }
