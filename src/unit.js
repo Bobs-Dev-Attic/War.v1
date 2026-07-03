@@ -1406,15 +1406,37 @@ export class Unit {
     this._rest();
     const t = this.stride;
     const { L, R } = this._legs(0.95, 1.5, 0.28);
-    // Bigger bound, driving forward lean, hard arm pump.
+    // Bigger bound, driving forward lean.
     this.j.body.position.y = Math.abs(Math.sin(t)) * 0.12 + 0.03;
     this.j.chest.rotation.x = -0.26;
     this.j.head.rotation.x = 0.12;                 // head up, eyes on the foe
-    this.j.rightShoulder.rotation.x = 0.15 + L * 0.7;
-    this.j.rightElbow.rotation.x = 0.95;
+    const j = this.j;
+    const bob = L * 0.12;                          // a little life in the carry
+    if (this.isBow) {
+      // A bow is carried across the body as they run — leave it as-is.
+      j.rightShoulder.rotation.x = 0.15 + L * 0.7;
+      j.rightElbow.rotation.x = 0.95;
+      this._applyHold();
+      j.leftShoulder.rotation.x += R * 0.3;
+      j.leftElbow.rotation.x += 0.15;
+      return;
+    }
+    // Running soldiers carry the weapon RAISED — the elbow folds up so the
+    // business end points skyward (weapons mount along the hand's local −y):
+    // spear tips up, sword blades and club heads up, not levelled or trailing.
+    if (this.twoHanded) {
+      // Great axe / maul hefted high, head up, both hands on the haft.
+      j.rightShoulder.rotation.set(0.5 + bob, 0, 0.14);
+      j.rightElbow.rotation.set(2.4, 0, 0);
+      this._applyTwoHandGrip();
+      return;
+    }
+    // Spear / sword / axe / club — one hand, off hand holds the shield in guard.
+    j.rightShoulder.rotation.set(0.3 + bob, 0, this.polearm ? -0.06 : 0.16);
+    j.rightElbow.rotation.set(this.polearm ? 2.7 : 2.5, 0, 0);
     this._applyHold();
-    this.j.leftShoulder.rotation.x += R * 0.3;     // shield arm pumps too
-    this.j.leftElbow.rotation.x += 0.15;
+    j.leftShoulder.rotation.x += R * 0.3;          // shield/off arm pumps with the stride
+    j.leftElbow.rotation.x += 0.15;
   }
 
   _animateDeath(dt) {
