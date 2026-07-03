@@ -77,11 +77,16 @@ attack patterns (`src/unitTypes.js`):
 
 **Rome** — Legionary (gladius + scutum), Hastatus (spear), Triarius (long pike,
 braced wall), Sagittarius (bow, kites & volleys), Veles (javelin skirmisher),
-Praetorian (elite guard).
+Praetorian (elite guard), **Eques (cavalry — a swift, lance-armed lancer on
+horseback)**.
 
 **The Horde** — Warrior (axe + shield), Berserker (greataxe, no shield, huge
 damage), Marauder (great maul, staggering smashes), Raider (spear + shield),
-Hunter (bow), Chieftain (towering elite champion).
+Hunter (bow), Chieftain (towering elite champion), **Outrider (mounted axe
+raider — fast, hard-hitting horse cavalry)**.
+
+**Cavalry** ride articulated horses that gallop into battle; they move far faster
+than infantry and carry a bigger reach, at a higher point cost.
 
 Archers and javelineers fire **projectiles**, keep their distance and fall back
 when a foe closes; pikes and spears out-reach swords; shields catch arrows.

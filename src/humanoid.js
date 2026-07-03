@@ -41,6 +41,48 @@ function segment(length, radiusTop, radiusBot, color, metal = 0) {
   return joint;
 }
 
+// A low-poly warhorse: body, neck, head, tail, saddle and four articulated
+// legs (each a hip + knee group) so the Unit can drive a gallop cycle. The
+// horse faces -z, matching the rider's front, so it turns with the unit.
+function buildHorse(c) {
+  const g = new THREE.Group();
+  const hide = c.horse || 0x6b4a2e;
+  const dark = 0x2a1a0e;
+  const body = box(0.5, 0.52, 1.5, hide, 0.92);
+  body.position.set(0, 1.02, 0.05);
+  g.add(body);
+  const rump = box(0.5, 0.5, 0.4, hide, 0.92); rump.position.set(0, 1.05, 0.72); g.add(rump);
+  const chest = box(0.48, 0.5, 0.35, hide, 0.92); chest.position.set(0, 1.0, -0.6); g.add(chest);
+  const neck = box(0.32, 0.6, 0.34, hide, 0.92);
+  neck.position.set(0, 1.36, -0.82); neck.rotation.x = 0.62; g.add(neck);
+  const head = box(0.22, 0.24, 0.52, hide, 0.9);
+  head.position.set(0, 1.62, -1.08); head.rotation.x = 0.28; g.add(head);
+  const muzzle = box(0.16, 0.16, 0.2, 0x4a3320, 0.9); muzzle.position.set(0, 1.5, -1.32); g.add(muzzle);
+  for (const ex of [-0.08, 0.08]) {
+    const ear = box(0.06, 0.12, 0.05, hide, 0.9); ear.position.set(ex, 1.76, -0.96); ear.rotation.x = -0.2; g.add(ear);
+  }
+  // Mane down the neck and a swishing tail.
+  const mane = box(0.06, 0.62, 0.36, dark, 0.95); mane.position.set(0, 1.4, -0.78); mane.rotation.x = 0.62; g.add(mane);
+  const tail = cyl(0.06, 0.02, 0.62, dark, 6, 0.95); tail.position.set(0, 1.0, 0.95); tail.rotation.x = -0.5; g.add(tail);
+  // Saddle + blanket the rider sits on.
+  const blanket = box(0.56, 0.08, 0.7, c.saddleCloth || 0x8a2a2a, 0.85); blanket.position.set(0, 1.3, 0.12); g.add(blanket);
+  const saddle = box(0.44, 0.14, 0.5, c.saddle || 0x4a2f1a, 0.7); saddle.position.set(0, 1.37, 0.12); g.add(saddle);
+
+  const legs = {};
+  const defs = [['fl', -0.19, -0.5], ['fr', 0.19, -0.5], ['bl', -0.19, 0.6], ['br', 0.19, 0.6]];
+  for (const [key, x, z] of defs) {
+    const hip = new THREE.Group();
+    hip.position.set(x, 0.96, z);
+    g.add(hip);
+    const upper = cyl(0.1, 0.07, 0.5, hide, 7, 0.9); upper.position.y = -0.25; hip.add(upper);
+    const knee = new THREE.Group(); knee.position.y = -0.5; hip.add(knee);
+    const lower = cyl(0.06, 0.045, 0.48, hide, 7, 0.9); lower.position.y = -0.24; knee.add(lower);
+    const hoof = box(0.11, 0.1, 0.15, dark, 0.9); hoof.position.set(0, -0.48, 0.01); knee.add(hoof);
+    legs[key] = { hip, knee };
+  }
+  return { group: g, legs };
+}
+
 export function buildHumanoid(cfg) {
   const c = cfg;
   const root = new THREE.Group();
@@ -224,10 +266,22 @@ export function buildHumanoid(cfg) {
   arms.left.elbow.rotation.x = 0.25;
   arms.right.elbow.rotation.x = 0.25;
 
+  // ---- Mount: seat the rider on a horse ----
+  let horse = null, horseLegs = null;
+  if (c.mounted) {
+    const h = buildHorse(c);
+    root.add(h.group);
+    horse = h.group; horseLegs = h.legs;
+    // Lift the rider onto the saddle and splay the legs down the horse's sides.
+    body.position.y = 0.5;
+    legs.left.hip.rotation.set(0.35, 0, 0.55); legs.left.knee.rotation.x = -1.25;
+    legs.right.hip.rotation.set(0.35, 0, -0.55); legs.right.knee.rotation.x = -1.25;
+  }
+
   root.traverse((o) => { if (o.isMesh) o.matrixAutoUpdate = true; });
 
   return {
-    root,
+    root, horse, horseLegs,
     joints: {
       body, chest, head,
       leftHip: legs.left.hip, leftKnee: legs.left.knee,

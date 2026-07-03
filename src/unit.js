@@ -59,16 +59,20 @@ export class Unit {
     this.polearm = cfg.weapon === 'spear' || cfg.weapon === 'pike';
     this.twoHanded = cfg.weapon === 'greataxe' || cfg.weapon === 'maul';
     this.isBow = cfg.weapon === 'bow';
+    this.mounted = !!cfg.mounted;
     this.shoveCooldown = Math.random() * 1.5;
     const built = buildHumanoid(cfg);
     this.root = built.root;
     this.j = built.joints;
+    this.horse = built.horse;
+    this.horseLegs = built.horseLegs;
     this.root.position.copy(position);
     // Subtle per-soldier build: the burly stand a touch taller and broader;
     // elite champions (Praetorian, Chieftain) stand out a little more.
     const scale = (0.94 + THREE.MathUtils.clamp((this.stats.build - 11) / 12, -0.06, 0.12)) * (this.elite ? 1.08 : 1);
     this.root.scale.setScalar(scale);
-    this.radius = 0.5 * scale;               // body collider (no two share a tile)
+    // Cavalry have a much bigger footprint than a lone soldier.
+    this.radius = (this.mounted ? 0.95 : 0.5) * scale;
     this.root.userData.unit = this;
     this.root.traverse((o) => { o.userData.unit = this; });
 
@@ -124,7 +128,7 @@ export class Unit {
     this.fill = fill;
     bar.add(bg);
     bar.add(fill);
-    bar.position.y = 2.15;
+    bar.position.y = this.mounted ? 2.95 : 2.15;   // clear the mounted rider's head
     bar.renderOrder = 999;
     bg.material.depthTest = false;
     fill.material.depthTest = false;
@@ -133,8 +137,9 @@ export class Unit {
   }
 
   _buildSelectionRing() {
+    const rr = this.mounted ? 1.05 : 0.55;
     const ring = new THREE.Mesh(
-      new THREE.RingGeometry(0.55, 0.72, 32),
+      new THREE.RingGeometry(rr, rr + 0.17, 32),
       new THREE.MeshBasicMaterial({
         color: this.faction === 'roman' ? 0x4fd06a : 0xd04f4f,
         transparent: true,
@@ -546,6 +551,8 @@ export class Unit {
     m.pose(this.j, p, this);
     // Keep the off hand on the haft as a two-handed weapon is swung.
     if (this.twoHanded && m.type !== 'ranged') this._applyTwoHandGrip();
+    // Mounted riders stay astride — keep the legs seated through the swing.
+    if (this.mounted) this._seatRider();
     this._applyFacing();                       // picks up spinOffset if the pose set it
     if (m.type === 'attack' && !mv.hitDone && p >= m.hit[0]) {
       mv.hitDone = true;
@@ -749,9 +756,10 @@ export class Unit {
     this.stamina = clamp(this.stamina - dt * (gait === 'run' ? 0.045 : 0.012), 0.12, 1);
     this.state = 'moving';
     this.gait = gait;
-    const freq = gait === 'run' ? 11 : 7;
+    const freq = this.mounted ? 14 : (gait === 'run' ? 11 : 7);
     this.stride += dt * freq;
-    if (gait === 'run') this._animateRun();
+    if (this.mounted) this._animateGallop();
+    else if (gait === 'run') this._animateRun();
     else this._animateWalk();
   }
 
@@ -786,6 +794,7 @@ export class Unit {
       this.j.rightKnee.rotation.x = -0.3;
       if (!this.polearm) { this.j.rightShoulder.rotation.set(0.3, 0, 0); this.j.rightElbow.rotation.x = 1.2; }
     }
+    if (this.mounted) this._seatRider(Math.sin(this.animT * 5) * 0.02);   // legs stay on the horse
     this.state = 'guard';
     this._recover(dt, 0.7);      // recover some wind while braced on guard
   }
@@ -846,6 +855,34 @@ export class Unit {
     // Shield/off arm held in guard, then the weapon arm at the ready.
     this._applyHold();
     this._readyArms();
+    if (this.mounted) { this._standHorse(); this._seatRider(); }
+  }
+
+  // ---- Mounted: seat the rider and stand/gallop the horse ----------------
+  _seatRider(bob = 0) {
+    const j = this.j;
+    j.body.position.y = 0.5 + bob;                 // up on the saddle
+    j.leftHip.rotation.set(0.32, 0, 0.55); j.leftKnee.rotation.x = -1.25;
+    j.rightHip.rotation.set(0.32, 0, -0.55); j.rightKnee.rotation.x = -1.25;
+  }
+
+  _standHorse() {
+    const L = this.horseLegs; if (!L) return;
+    for (const k of ['fl', 'fr', 'bl', 'br']) { L[k].hip.rotation.x = 0; L[k].knee.rotation.x = -0.05; }
+  }
+
+  _animateGallop() {
+    const t = this.stride, L = this.horseLegs;
+    if (L) {
+      const swing = (ph) => Math.sin(t + ph);
+      const tuck = (ph) => -0.35 + Math.max(0, Math.sin(t + ph)) * 0.7;
+      // Diagonal pairs lead the gait.
+      L.fl.hip.rotation.x = swing(0) * 0.6;         L.fl.knee.rotation.x = tuck(0);
+      L.br.hip.rotation.x = swing(0.4) * 0.55;      L.br.knee.rotation.x = tuck(0.4);
+      L.fr.hip.rotation.x = swing(Math.PI) * 0.6;   L.fr.knee.rotation.x = tuck(Math.PI);
+      L.bl.hip.rotation.x = swing(Math.PI + 0.4) * 0.55; L.bl.knee.rotation.x = tuck(Math.PI + 0.4);
+    }
+    this._seatRider(Math.abs(Math.sin(t)) * 0.05);   // rider bobs with the gait
   }
 
   // Pose the weapon arm (and, for two-handed weapons and bows, the off arm) into
@@ -899,6 +936,7 @@ export class Unit {
     this._rest();                              // keeps weapon up & shield ready
     this.j.body.position.y = Math.sin(this.animT * 1.6) * 0.02;
     this.j.chest.rotation.x = -0.04 + Math.sin(this.animT * 1.6) * 0.02;
+    if (this.mounted) this._seatRider(Math.sin(this.animT * 1.6) * 0.02);
     // Gentle breathing sway on the one-handed ready arm only (leave the polearm,
     // bow and two-handed holds as posed by _readyArms).
     if (!this.polearm && !this.isBow && !this.twoHanded) {
