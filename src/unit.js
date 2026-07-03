@@ -615,6 +615,12 @@ export class Unit {
         crit ? 0xffd24f : this.faction === 'roman' ? 0xffe0a0 : 0xff9a70,
         crit ? 1.35 : 1
       );
+      // Dust kicks up at their feet as they clash — more on heavy, shoving blows.
+      if (m.heavy || m.shove || m.stagger || Math.random() < 0.5) {
+        const mx = (this.position.x + tgt.position.x) / 2;
+        const mz = (this.position.z + tgt.position.z) / 2;
+        game.spawnDust(mx, mz, m.heavy || m.shove ? 7 : 4, m.heavy || m.shove ? 1.4 : 1);
+      }
       if (m.stagger) tgt._knockback(this, m.shove ? 0.85 : 0.3);
       // Chance to hack off a limb — higher on crits, heavy blows and kills.
       const killing = wasAlive && !tgt.alive;
@@ -826,7 +832,8 @@ export class Unit {
       this.position.x *= maxR / r;
       this.position.z *= maxR / r;
     }
-    this.position.y = 0;
+    // Stand on the terrain surface rather than a flat plane.
+    this.position.y = this.world ? this.world.heightAt(this.position.x, this.position.z) : 0;
   }
 
   // ---- Animations --------------------------------------------------------
@@ -935,8 +942,9 @@ export class Unit {
     this.j.leftKnee.rotation.x = 0.8 * ease;
     this.j.rightKnee.rotation.x = 0.6 * ease;
     this.j.head.rotation.x = 0.3 * ease;
-    // Sink slightly so bodies rest flush with the field.
-    this.root.position.y = -0.02 * ease;
+    // Sink slightly so bodies rest flush with the field (on the terrain surface).
+    const groundY = this.world ? this.world.heightAt(this.position.x, this.position.z) : 0;
+    this.root.position.y = groundY - 0.02 * ease;
   }
 
   _animateSurrender(dt, game) {
@@ -953,11 +961,9 @@ export class Unit {
         const wp = new THREE.Vector3();
         weapon.getWorldPosition(wp);
         game.world.scene.attach(weapon);
-        weapon.position.set(
-          this.position.x + Math.sin(this.facing) * 0.6,
-          0.08,
-          this.position.z + Math.cos(this.facing) * 0.6
-        );
+        const wx = this.position.x + Math.sin(this.facing) * 0.6;
+        const wz = this.position.z + Math.cos(this.facing) * 0.6;
+        weapon.position.set(wx, (this.world ? this.world.heightAt(wx, wz) : 0) + 0.08, wz);
         weapon.rotation.set(Math.PI / 2, Math.random() * 3, 0);
       }
     }
