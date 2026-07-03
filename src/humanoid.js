@@ -319,7 +319,10 @@ function attachEquipment(c, arms) {
       butt.position.y = 0.25;
       spear.add(butt);
     }
-    spear.rotation.x = -Math.PI / 2;
+    // Spears and pikes mount IN-LINE with the forearm so a leveled arm points
+    // the tip straight at the foe (the poses hold the arm out level). The
+    // javelin stays perpendicular — it's carried, then thrown overhand.
+    spear.rotation.x = c.weapon === 'javelin' ? -Math.PI / 2 : 0;
     arms.right.hand.add(spear);
     arms.right.hand.userData.weaponTip = new THREE.Vector3(0, -(len - 0.25), 0);
   } else if (c.weapon === 'greataxe') {

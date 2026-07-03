@@ -168,8 +168,10 @@ function flinchPose(j, t) {
 // One-handed on the weapon arm, so shield-bearers keep their guard.
 
 function spearThrustPose(j, t) {
-  const sh = kf(t, [[0, 0.15], [0.28, -0.15], [0.5, 0.85], [0.62, 0.95], [1, 0.15]]);
-  const el = kf(t, [[0, 0.25], [0.28, 1.3], [0.5, 0.3], [0.62, 0.25], [1, 0.25]]);
+  // In-line spear: the arm stays level (~1.4) so the point holds on the foe;
+  // it cocks back, then drives forward with a body lunge for a stabbing jab.
+  const sh = kf(t, [[0, 1.4], [0.28, 1.55], [0.5, 1.12], [0.62, 1.08], [1, 1.4]]);
+  const el = kf(t, [[0, 0.1], [0.28, 0.6], [0.5, 0.04], [0.62, 0.0], [1, 0.1]]);
   const lunge = kf(t, [[0, 0], [0.5, 0.55], [0.64, 0.5], [1, 0]]);
   j.rightShoulder.rotation.x = sh;
   j.rightElbow.rotation.x = el;
@@ -180,9 +182,9 @@ function spearThrustPose(j, t) {
 }
 
 function pikeThrustPose(j, t) {
-  // Braced, measured lunge — the long shaft does the reaching.
-  const sh = kf(t, [[0, 0.1], [0.35, -0.05], [0.55, 0.6], [0.68, 0.7], [1, 0.1]]);
-  const el = kf(t, [[0, 0.4], [0.35, 0.9], [0.55, 0.35], [0.68, 0.3], [1, 0.4]]);
+  // Braced, measured lunge — the long shaft (held level) does the reaching.
+  const sh = kf(t, [[0, 1.35], [0.35, 1.5], [0.55, 1.12], [0.68, 1.08], [1, 1.35]]);
+  const el = kf(t, [[0, 0.1], [0.35, 0.45], [0.55, 0.02], [0.68, 0.0], [1, 0.1]]);
   const brace = kf(t, [[0, 0], [0.5, 0.35], [0.66, 0.3], [1, 0]]);
   j.rightShoulder.rotation.x = sh;
   j.rightElbow.rotation.x = el;
