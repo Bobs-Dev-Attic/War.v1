@@ -773,9 +773,9 @@ export class Unit {
     this.j.leftKnee.rotation.x = -0.22;
     this.j.rightKnee.rotation.x = -0.22;
     if (this.polearm) {
-      // Level the shaft at the foe rather than raising a blade.
-      this.j.rightShoulder.rotation.set(-0.16, 0, 0.12);
-      this.j.rightElbow.rotation.x = 0.0;
+      // Level the shaft at the foe rather than raising a blade — braced to jab.
+      this.j.rightShoulder.rotation.set(1.35, 0, 0.0);
+      this.j.rightElbow.rotation.x = 0.12;
     } else {
       this.j.rightShoulder.rotation.set(0.3, 0, 0);   // blade up at the ready
       this.j.rightElbow.rotation.x = 1.5;
@@ -849,10 +849,9 @@ export class Unit {
     // Shield arm held in guard.
     this._applyHold();
     if (this.polearm) {
-      // Level the long shaft forward (near-straight arm) so it doesn't stab the
-      // ground; a slight up-tilt keeps the point ahead of the foe.
-      j.rightShoulder.rotation.set(-0.12, 0, 0.14);
-      j.rightElbow.rotation.set(0.0, 0, 0);
+      // Hold the shaft level, arm out, so the point aims straight at the foe.
+      j.rightShoulder.rotation.set(1.4, 0, 0.0);
+      j.rightElbow.rotation.set(0.1, 0, 0);
     } else if (this.ranged && this.weaponKind === 'bow') {
       // Archer's draw hand rests near the string.
       j.rightShoulder.rotation.set(0.2, 0, 0);
