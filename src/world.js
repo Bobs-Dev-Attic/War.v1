@@ -417,9 +417,12 @@ export class World {
       b.mesh.position.set(x, b.height + Math.sin(b.angle * 2) * 0.6, z);
       b.mesh.rotation.y = -b.angle + Math.PI / 2;   // bank into the turn
       const wl = b.mesh.children;
-      const flap = Math.sin(b.flap) * 0.35;
-      if (wl[0]) wl[0].rotation.z = 0.5 + flap;
-      if (wl[1]) wl[1].rotation.z = -0.5 - flap;
+      // Wings raise and lower together in a natural upstroke/downstroke. Signs
+      // match the build dihedral (left wing negative, right positive) so the
+      // beat folds the right way rather than inverting the wings.
+      const a = 0.5 + Math.sin(b.flap) * 0.5;
+      if (wl[0]) wl[0].rotation.z = -a;   // left wing (built at side -1)
+      if (wl[1]) wl[1].rotation.z = a;    // right wing (built at side +1)
     }
     const w = this._weather;
     if (w) {
