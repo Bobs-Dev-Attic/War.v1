@@ -12,9 +12,18 @@ export class Game {
     this.markers = [];
     this.floaters = [];
     this.projectiles = [];
+    this.gibs = [];              // severed limbs / dropped gear tumbling to ground
+    this.blood = [];             // airborne blood droplets
+    this.decals = [];            // blood splatter & puddles on the ground
+    this.bleeders = [];          // stumps squirting blood over time
     this.hoveredEnemy = null;
     this._texCache = new Map();
     this.over = false;
+
+    // Shared assets for gore effects.
+    this._dropGeo = new THREE.CircleGeometry(1, 14);
+    this._dropGeo.rotateX(-Math.PI / 2);
+    this._bloodDrop = new THREE.SphereGeometry(0.05, 5, 4);
 
     // Current battle composition (editable via the New Battle screen).
     this.composition = {
@@ -313,6 +322,121 @@ export class Game {
     this.projectiles.splice(i, 1);
   }
 
+  // ---- Gore: blood, puddles, severed gibs, bleeding stumps ----------------
+  _bloodMat() {
+    return new THREE.MeshStandardMaterial({ color: 0x8a0d0d, roughness: 0.6, metalness: 0 });
+  }
+
+  // A spray of blood droplets that arc, fall and stain the ground.
+  spawnBlood(pos, dir, count = 10, force = 1) {
+    for (let i = 0; i < count; i++) {
+      const m = new THREE.Mesh(this._bloodDrop, this._bloodMat());
+      m.position.set(pos.x, pos.y, pos.z);
+      const spread = 2.4 * force;
+      const v = new THREE.Vector3(
+        (dir ? dir.x : 0) * 1.5 * force + (Math.random() - 0.5) * spread,
+        Math.random() * 3 * force + 1,
+        (dir ? dir.z : 0) * 1.5 * force + (Math.random() - 0.5) * spread
+      );
+      this.blood.push({ mesh: m, v, life: 1.2 });
+      this.group.add(m);
+    }
+  }
+
+  // A flat stain on the ground (splatter or a growing puddle).
+  spawnDecal(x, z, radius, opacity = 0.9) {
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0x6e0a0a, transparent: true, opacity, depthWrite: false,
+    });
+    const d = new THREE.Mesh(this._dropGeo, mat);
+    d.position.set(x, 0.02 + Math.random() * 0.01, z);
+    d.scale.setScalar(radius);
+    d.rotation.y = Math.random() * Math.PI;
+    this.decals.push({ mesh: d, grow: 0, max: radius });
+    this.group.add(d);
+    // Cap the number of decals so a long grind doesn't tank the framerate.
+    if (this.decals.length > 160) {
+      const old = this.decals.shift();
+      this.group.remove(old.mesh);
+      old.mesh.material.dispose();
+    }
+    return d;
+  }
+
+  // Turn a detached limb / dropped item into a tumbling gib.
+  addGib(obj, vel, spin) {
+    this.group.attach(obj);                 // reparent, keeping its world transform
+    this.gibs.push({ obj, v: vel, spin, life: 30, rest: false });
+  }
+
+  // A wound that squirts blood and pools beneath it for a while.
+  addBleeder(unit, offset, duration = 2.5) {
+    const puddle = this.spawnDecal(unit.position.x, unit.position.z, 0.15, 0.85);
+    this.bleeders.push({ unit, offset: offset.clone(), life: duration, puddle, t: 0 });
+  }
+
+  _updateGore(dt) {
+    const wp = new THREE.Vector3();
+    // Blood droplets.
+    for (let i = this.blood.length - 1; i >= 0; i--) {
+      const b = this.blood[i];
+      b.life -= dt;
+      b.v.y -= 12 * dt;
+      b.mesh.position.addScaledVector(b.v, dt);
+      if (b.mesh.position.y <= 0.05) {
+        this.spawnDecal(b.mesh.position.x, b.mesh.position.z, 0.1 + Math.random() * 0.14, 0.85);
+        this._killBlood(i);
+      } else if (b.life <= 0) {
+        this._killBlood(i);
+      }
+    }
+    // Bleeding stumps: squirt + grow a puddle.
+    for (let i = this.bleeders.length - 1; i >= 0; i--) {
+      const bl = this.bleeders[i];
+      bl.life -= dt; bl.t += dt;
+      const u = bl.unit;
+      if (!u || (!u.alive && u.state !== 'dead')) { this.bleeders.splice(i, 1); continue; }
+      u.root.updateMatrixWorld();
+      wp.copy(bl.offset).applyMatrix4(u.root.matrixWorld);
+      if (Math.random() < 0.7) this.spawnBlood(wp, null, 2, 0.7); // squirt
+      if (bl.puddle) {
+        bl.puddle.position.x = u.position.x;
+        bl.puddle.position.z = u.position.z;
+        bl.puddle.scale.setScalar(Math.min(0.9, 0.15 + bl.t * 0.28));
+      }
+      if (bl.life <= 0) this.bleeders.splice(i, 1);
+    }
+    // Tumbling gibs.
+    for (let i = this.gibs.length - 1; i >= 0; i--) {
+      const g = this.gibs[i];
+      g.life -= dt;
+      if (!g.rest) {
+        g.v.y -= 14 * dt;
+        g.obj.position.addScaledVector(g.v, dt);
+        g.obj.rotation.x += g.spin.x * dt;
+        g.obj.rotation.y += g.spin.y * dt;
+        g.obj.rotation.z += g.spin.z * dt;
+        if (g.obj.position.y <= 0.08) {
+          g.obj.position.y = 0.08;
+          g.rest = true;
+          this.spawnDecal(g.obj.position.x, g.obj.position.z, 0.3, 0.9);
+        }
+      }
+      if (g.life <= 0) {
+        this.group.remove(g.obj);
+        g.obj.traverse((o) => { if (o.geometry && o.geometry !== this._bloodDrop) o.geometry.dispose(); });
+        this.gibs.splice(i, 1);
+      }
+    }
+  }
+
+  _killBlood(i) {
+    const b = this.blood[i];
+    this.group.remove(b.mesh);
+    b.mesh.material.dispose();
+    this.blood.splice(i, 1);
+  }
+
   _spawnMarker(point, color) {
     const m = new THREE.Mesh(
       this._moveMarkerGeo,
@@ -368,6 +492,7 @@ export class Game {
     for (const u of this.units) u.update(dt, this);
     this._resolveCollisions();
     this._updateProjectiles(dt);
+    this._updateGore(dt);
     this._updateEffects(dt);
     this.ui.updateTally(this);
     this.ui.updateStats(this._inspectUnit());
@@ -461,6 +586,10 @@ export class Game {
     this.markers = [];
     this.floaters = [];
     this.projectiles = [];
+    this.gibs = [];
+    this.blood = [];
+    this.decals = [];
+    this.bleeders = [];
     this.hoveredEnemy = null;
     this.over = false;
     this.group = new THREE.Group();

@@ -101,6 +101,16 @@ factions are balanced ~50/50 — the player tips it with tactics.
 Body **colliders** keep any two units from occupying the same space; fallen
 bodies are walked over.
 
+### Gore
+
+Combat is bloody. Blows **splatter blood** that arcs and stains the ground, and
+strong or killing hits can **hack off limbs** — arms, legs, even heads. Severed
+parts fly off as tumbling gibs, the wound gushes and leaves a **bleeding stump**,
+and **blood pools spread** on the dirt. Losing a leg drops a soldier to
+**crawl** forward in agony; losing the weapon arm **disarms** them (they break
+and flee); a decapitation is instantly fatal. The dead **drop their weapons and
+shields** where they fall.
+
 ## Tech
 
 - **Three.js** — orthographic isometric camera rig, soft shadows, ACES tone
