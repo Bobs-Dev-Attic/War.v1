@@ -42,6 +42,14 @@ export function defaultPlacement() {
   };
 }
 
+// Split `total` units across `groups` as evenly as possible (front groups get
+// the remainder), e.g. distributeCounts(7, 3) => [3, 2, 2].
+export function distributeCounts(total, groups) {
+  const g = Math.max(1, Math.min(groups, total));
+  const base = Math.floor(total / g), rem = total % g;
+  return Array.from({ length: g }, (_, i) => base + (i < rem ? 1 : 0));
+}
+
 const MAX_ROWS = 8;   // keep the deepest formation inside the field
 
 // Deterministic tiny jitter so skirmish lines look loose but reproducible-ish.
