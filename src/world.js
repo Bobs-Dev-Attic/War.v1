@@ -393,8 +393,7 @@ export class World {
       for (const side of [-1, 1]) {
         const pivot = new THREE.Group();
         const wing = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.55), mat);
-        // Wings stand upright (broad face fore/aft) so they read clearly from
-        // the low isometric camera; the hinge still beats the tips up and down.
+        wing.rotation.x = Math.PI / 2;       // lay the wing surface flat (horizontal)
         wing.rotation.z = -side * 0.14;      // slight sweep-back at the tip
         wing.position.set(side * 0.7, 0, -0.05); // inner edge at hinge, reaches out
         pivot.add(wing);
@@ -425,7 +424,7 @@ export class World {
       const x = b.cx + Math.cos(b.angle) * b.radius;
       const z = b.cz + Math.sin(b.angle) * b.radius;
       b.mesh.position.set(x, b.height + Math.sin(b.angle * 2) * 0.6, z);
-      b.mesh.rotation.y = -b.angle + Math.PI / 2;   // face the line of flight
+      b.mesh.rotation.y = -b.angle + Math.PI;       // face the line of flight (turned 90°)
       // Beat the wings up and down together: the hinge rotates about the bird's
       // forward axis, so a positive angle lifts each tip. Both wings share the
       // same phase, giving a clean upstroke/downstroke rather than a roll.

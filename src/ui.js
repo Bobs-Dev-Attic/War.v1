@@ -1,7 +1,7 @@
 import { ATTRS, ATTR_LABELS } from './attributes.js';
 import { UNIT_TYPES, ROMAN_TYPES, BARBARIAN_TYPES } from './unitTypes.js';
 import { ENVIRONMENTS, ENV_KEYS, DEFAULT_ENV } from './environments.js';
-import { FORMATIONS, FORMATION_KEYS, formationOffsets, distributeCounts, PLACEMENT_BOUNDS, DEFAULT_FORMATION } from './formations.js';
+import { FORMATIONS, FORMATION_KEYS, formationOffsets, rotateSlots, distributeCounts, PLACEMENT_BOUNDS, DEFAULT_FORMATION } from './formations.js';
 import { defaultGroups } from './game.js';
 
 // The engine handles large armies comfortably (collision/AI are cheap and the
@@ -144,7 +144,7 @@ export class UI {
     }
   }
 
-  // Roster: per unit type, a count stepper and (when 2+) a "groups" splitter.
+  // Roster: per unit type, a count dropdown and (when 2+) a "groups" dropdown.
   _renderRoster(containerId, side) {
     const host = document.getElementById(containerId);
     if (!host) return;
@@ -153,44 +153,51 @@ export class UI {
       const t = UNIT_TYPES[key];
       const r = this._roster[side][key] || { count: 0, groups: 1 };
       const groups = Math.max(1, Math.min(r.groups || 1, r.count));
-      const groupCtl = r.count >= 2
-        ? `<span class="type-groups">groups
-             <span class="stepper stepper-sm">
-               <button data-g="-1">−</button><span class="gcount">${groups}</span><button data-g="1">+</button>
-             </span></span>` : '';
+      // How many of this type we could still add without breaking the side cap.
+      const headroom = MAX_PER_SIDE - (this._sideCount(side) - r.count);
+      const maxCount = Math.min(MAX_PER_TYPE, headroom);
       const row = document.createElement('div');
       row.className = 'type-row';
       row.innerHTML =
         `<span class="type-name">${t.label}</span>
-         <span class="stepper">
-           <button data-d="-1">−</button><span class="count">${r.count}</span><button data-d="1">+</button>
-         </span>
-         ${groupCtl}
+         <select class="ros-select" data-role="count"></select>
+         <span class="type-groups${r.count >= 2 ? '' : ' hidden'}">groups
+           <select class="ros-select ros-groups" data-role="groups"></select></span>
          <span class="type-desc">${t.desc}</span>`;
-      row.querySelectorAll('button[data-d]').forEach((b) =>
-        b.addEventListener('click', () => this._stepCount(side, key, +b.dataset.d)));
-      row.querySelectorAll('button[data-g]').forEach((b) =>
-        b.addEventListener('click', () => this._stepGroups(side, key, +b.dataset.g)));
+      const countSel = row.querySelector('[data-role="count"]');
+      this._fillSelect(countSel, 0, maxCount, r.count);
+      countSel.addEventListener('change', () => this._setCount(side, key, +countSel.value));
+      const grpSel = row.querySelector('[data-role="groups"]');
+      this._fillSelect(grpSel, 1, r.count, groups);
+      grpSel.addEventListener('change', () => this._setGroups(side, key, +grpSel.value));
       host.appendChild(row);
     }
   }
 
-  _stepCount(side, key, delta) {
+  _fillSelect(sel, lo, hi, cur) {
+    sel.innerHTML = '';
+    for (let v = lo; v <= hi; v++) {
+      const o = document.createElement('option');
+      o.value = v; o.textContent = v;
+      if (v === cur) o.selected = true;
+      sel.appendChild(o);
+    }
+  }
+
+  _setCount(side, key, value) {
     const roster = this._roster[side];
     const r = roster[key] || (roster[key] = { count: 0, groups: 1 });
-    const total = this._sideCount(side);
-    let next = Math.max(0, Math.min(MAX_PER_TYPE, r.count + delta));
-    if (delta > 0 && total - r.count + next > MAX_PER_SIDE) return;
-    r.count = next;
+    const headroom = MAX_PER_SIDE - (this._sideCount(side) - r.count);
+    r.count = Math.max(0, Math.min(MAX_PER_TYPE, headroom, value));
     r.groups = r.count < 2 ? 1 : Math.min(r.groups || 1, r.count);
     this._rebuildGroups(side);
     this._renderSide(side);
   }
 
-  _stepGroups(side, key, delta) {
+  _setGroups(side, key, value) {
     const r = this._roster[side][key];
     if (!r || r.count < 1) return;
-    r.groups = Math.max(1, Math.min(r.count, (r.groups || 1) + delta));
+    r.groups = Math.max(1, Math.min(r.count, value));
     this._rebuildGroups(side);
     this._renderSide(side);
   }
@@ -220,7 +227,7 @@ export class UI {
     const dz = side === 'roman' ? 9 : -9;
     const dir = side === 'roman' ? 1 : -1;
     return {
-      id: ++this._gid, typeKey, count, formation: DEFAULT_FORMATION,
+      id: ++this._gid, typeKey, count, formation: DEFAULT_FORMATION, rot: 0,
       x: clamp(((idx % 5) - 2) * 6, B.xMin, B.xMax),
       z: clamp(dz + dir * Math.floor(idx / 5) * 4, B.zMin, B.zMax),
     };
@@ -258,6 +265,21 @@ export class UI {
         this._drawMap(this._sideIds(side).map, side);
       });
       row.appendChild(sel);
+      // Rotation: turn the block in 15° steps.
+      const rot = document.createElement('select');
+      rot.className = 'grp-rot'; rot.title = 'Rotate formation';
+      for (let a = 0; a < 360; a += 15) {
+        const opt = document.createElement('option');
+        opt.value = a; opt.textContent = a + '°';
+        if (a === (grp.rot || 0)) opt.selected = true;
+        rot.appendChild(opt);
+      }
+      rot.addEventListener('pointerdown', (e) => e.stopPropagation());
+      rot.addEventListener('change', () => {
+        grp.rot = +rot.value;
+        this._drawMap(this._sideIds(side).map, side);
+      });
+      row.appendChild(rot);
       row.addEventListener('click', () => this._selectGroup(side, grp.id));
       host.appendChild(row);
     });
@@ -282,7 +304,7 @@ export class UI {
   _groupUnits(side, grp) {
     const spacing = side === 'roman' ? 2.2 : 2.4;
     const rowGap = grp.count > 24 ? 1.75 : 1.9;
-    const slots = formationOffsets(grp.formation, grp.count, spacing, rowGap);
+    const slots = rotateSlots(formationOffsets(grp.formation, grp.count, spacing, rowGap), grp.rot || 0);
     const dir = side === 'roman' ? 1 : -1;
     return slots.map((s) => ({ x: grp.x + s.x, z: grp.z + dir * s.depth }));
   }
@@ -392,6 +414,7 @@ export class UI {
         budget -= count;
         groups.push({
           id: ++this._gid, typeKey: pick(types), count, formation: pick(FORMATION_KEYS),
+          rot: Math.floor(Math.random() * 24) * 15,
           x: clamp(Math.round(B.xMin + Math.random() * (B.xMax - B.xMin)), B.xMin, B.xMax),
           z: clamp(Math.round(B.zMin + Math.random() * (B.zMax - B.zMin)), B.zMin, B.zMax),
         });

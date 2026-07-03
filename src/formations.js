@@ -42,6 +42,14 @@ export function defaultPlacement() {
   };
 }
 
+// Rotate a formation's slots about its anchor by `deg` degrees. x is lateral,
+// depth runs back from the front line; rotating turns the whole block.
+export function rotateSlots(slots, deg) {
+  if (!deg) return slots;
+  const r = (deg * Math.PI) / 180, c = Math.cos(r), s = Math.sin(r);
+  return slots.map((o) => ({ x: o.x * c - o.depth * s, depth: o.x * s + o.depth * c }));
+}
+
 // Split `total` units across `groups` as evenly as possible (front groups get
 // the remainder), e.g. distributeCounts(7, 3) => [3, 2, 2].
 export function distributeCounts(total, groups) {
