@@ -1,7 +1,8 @@
 import { ATTRS, ATTR_LABELS } from './attributes.js';
-import { UNIT_TYPES, ROMAN_TYPES, BARBARIAN_TYPES, DEFAULT_ARMY, composeArmy, armyCount } from './unitTypes.js';
+import { UNIT_TYPES, ROMAN_TYPES, BARBARIAN_TYPES } from './unitTypes.js';
 import { ENVIRONMENTS, ENV_KEYS, DEFAULT_ENV } from './environments.js';
-import { FORMATIONS, FORMATION_KEYS, formationOffsets, defaultPlacement, PLACEMENT_BOUNDS } from './formations.js';
+import { FORMATIONS, FORMATION_KEYS, formationOffsets, distributeCounts, PLACEMENT_BOUNDS, DEFAULT_FORMATION } from './formations.js';
+import { defaultGroups } from './game.js';
 
 // The engine handles large armies comfortably (collision/AI are cheap and the
 // formation packs deep armies inside the field), so these caps are generous.
@@ -45,10 +46,7 @@ export class UI {
     });
     document.getElementById('setup-cancel').addEventListener('click', () => this.closeSetup());
     document.getElementById('setup-start').addEventListener('click', () => {
-      game.startBattle(this._setupComp, {
-        environment: this._setupEnv,
-        placement: this._setupPlacement,
-      });
+      game.startBattle({ environment: this._setupEnv, groups: this._setupGroups });
       this.closeSetup();
     });
     // Tabs: Location / Rome / The Horde.
@@ -65,17 +63,19 @@ export class UI {
   }
 
   // ---- Battle setup (tabbed: Location / Rome / Horde) --------------------
+  //
+  // Each side is a list of GROUPS: { id, typeKey, count, formation, x, z }. The
+  // roster (per type: total count + how many groups to split it into) drives the
+  // group list; each group then gets its own formation and drag-to-place anchor.
   openSetup() {
-    // Start from a copy of the current composition and battlefield settings.
-    this._setupComp = {
-      roman: { ...this.game.composition.roman },
-      barbarian: { ...this.game.composition.barbarian },
-    };
+    this._gid = this._gid || 0;
     this._setupEnv = this.game.environment;
-    this._setupPlacement = {
-      roman: { ...this.game.placement.roman },
-      barbarian: { ...this.game.placement.barbarian },
+    this._setupGroups = {
+      roman: this.game.groups.roman.map((g) => ({ ...g, id: ++this._gid })),
+      barbarian: this.game.groups.barbarian.map((g) => ({ ...g, id: ++this._gid })),
     };
+    this._roster = { roman: this._deriveRoster('roman'), barbarian: this._deriveRoster('barbarian') };
+    this._sel = { roman: null, barbarian: null };
     this._renderAll();
     this._wireMap('rome-map', 'roman');
     this._wireMap('horde-map', 'barbarian');
@@ -83,25 +83,47 @@ export class UI {
     this.setup.classList.add('show');
   }
 
-  // Re-render every control from the current setup state.
+  _sideIds(side) {
+    return side === 'roman'
+      ? { types: 'rome-types', map: 'rome-map', legend: 'rome-legend', total: 'rome-total' }
+      : { types: 'horde-types', map: 'horde-map', legend: 'horde-legend', total: 'horde-total' };
+  }
+  _sideTypes(side) { return side === 'roman' ? ROMAN_TYPES : BARBARIAN_TYPES; }
+  _sideCount(side) { return this._setupGroups[side].reduce((a, g) => a + g.count, 0); }
+
+  _deriveRoster(side) {
+    const r = {};
+    for (const g of this._setupGroups[side]) {
+      if (!r[g.typeKey]) r[g.typeKey] = { count: 0, groups: 0 };
+      r[g.typeKey].count += g.count;
+      r[g.typeKey].groups += 1;
+    }
+    return r;
+  }
+
   _renderAll() {
     this._renderEnvChoices();
-    this._renderSetup('rome-types', ROMAN_TYPES, 'roman');
-    this._renderSetup('horde-types', BARBARIAN_TYPES, 'barbarian');
-    this._renderFormationChoice('rome-formation', 'roman');
-    this._renderFormationChoice('horde-formation', 'barbarian');
-    this._drawMap('rome-map', 'roman');
-    this._drawMap('horde-map', 'barbarian');
-    this._refreshSetupTotals();
+    this._renderSide('roman');
+    this._renderSide('barbarian');
+  }
+
+  _renderSide(side) {
+    const id = this._sideIds(side);
+    this._renderRoster(id.types, side);
+    this._renderLegend(id.legend, side);
+    this._drawMap(id.map, side);
+    this._refreshTotals();
   }
 
   _showTab(name) {
     document.querySelectorAll('#setup .setup-tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === name));
     document.querySelectorAll('#setup .setup-panel').forEach((p) => p.classList.toggle('active', p.dataset.panel === name));
-    // Canvases only lay out correctly once visible — redraw on show.
+    // Canvases only size correctly once visible — redraw on show.
     if (name === 'rome') this._drawMap('rome-map', 'roman');
     if (name === 'horde') this._drawMap('horde-map', 'barbarian');
   }
+
+  closeSetup() { this.setup.classList.remove('show'); }
 
   // Battlefield picker: a grid of location/weather tiles.
   _renderEnvChoices() {
@@ -122,105 +144,152 @@ export class UI {
     }
   }
 
-  // Per-side formation selector; changing it re-lays the deployment map.
-  _renderFormationChoice(hostId, side) {
-    const host = document.getElementById(hostId);
+  // Roster: per unit type, a count stepper and (when 2+) a "groups" splitter.
+  _renderRoster(containerId, side) {
+    const host = document.getElementById(containerId);
     if (!host) return;
     host.innerHTML = '';
-    const sel = document.createElement('select');
-    sel.className = 'form-select';
-    for (const key of FORMATION_KEYS) {
-      const opt = document.createElement('option');
-      opt.value = key;
-      opt.textContent = FORMATIONS[key].label;
-      if (key === this._setupPlacement[side].formation) opt.selected = true;
-      sel.appendChild(opt);
-    }
-    const desc = document.createElement('span');
-    desc.className = 'form-desc';
-    desc.textContent = FORMATIONS[this._setupPlacement[side].formation].desc;
-    sel.addEventListener('change', () => {
-      this._setupPlacement[side].formation = sel.value;
-      desc.textContent = FORMATIONS[sel.value].desc;
-      this._drawMap(side === 'roman' ? 'rome-map' : 'horde-map', side);
-    });
-    host.appendChild(sel);
-    host.appendChild(desc);
-  }
-
-  closeSetup() { this.setup.classList.remove('show'); }
-
-  _renderSetup(containerId, typeKeys, side) {
-    const host = document.getElementById(containerId);
-    host.innerHTML = '';
-    for (const key of typeKeys) {
+    for (const key of this._sideTypes(side)) {
       const t = UNIT_TYPES[key];
+      const r = this._roster[side][key] || { count: 0, groups: 1 };
+      const groups = Math.max(1, Math.min(r.groups || 1, r.count));
+      const groupCtl = r.count >= 2
+        ? `<span class="type-groups">groups
+             <span class="stepper stepper-sm">
+               <button data-g="-1">−</button><span class="gcount">${groups}</span><button data-g="1">+</button>
+             </span></span>` : '';
       const row = document.createElement('div');
       row.className = 'type-row';
       row.innerHTML =
         `<span class="type-name">${t.label}</span>
          <span class="stepper">
-           <button data-d="-1">−</button>
-           <span class="count" id="cnt-${side}-${key}">0</span>
-           <button data-d="1">+</button>
+           <button data-d="-1">−</button><span class="count">${r.count}</span><button data-d="1">+</button>
          </span>
+         ${groupCtl}
          <span class="type-desc">${t.desc}</span>`;
-      const countEl = row.querySelector('.count');
-      countEl.textContent = this._setupComp[side][key] || 0;
-      row.querySelectorAll('button').forEach((b) => {
-        b.addEventListener('click', () => this._step(side, key, +b.dataset.d, countEl));
-      });
+      row.querySelectorAll('button[data-d]').forEach((b) =>
+        b.addEventListener('click', () => this._stepCount(side, key, +b.dataset.d)));
+      row.querySelectorAll('button[data-g]').forEach((b) =>
+        b.addEventListener('click', () => this._stepGroups(side, key, +b.dataset.g)));
       host.appendChild(row);
     }
   }
 
-  _step(side, key, delta, countEl) {
-    const comp = this._setupComp[side];
-    const cur = comp[key] || 0;
-    let next = cur + delta;
-    if (next < 0) next = 0;
-    if (next > MAX_PER_TYPE) next = MAX_PER_TYPE;
-    // Respect the per-side cap.
-    if (delta > 0 && armyCount(comp) - cur + next > MAX_PER_SIDE) return;
-    comp[key] = next;
-    countEl.textContent = next;
-    this._refreshSetupTotals();
-    this._drawMap(side === 'roman' ? 'rome-map' : 'horde-map', side);
+  _stepCount(side, key, delta) {
+    const roster = this._roster[side];
+    const r = roster[key] || (roster[key] = { count: 0, groups: 1 });
+    const total = this._sideCount(side);
+    let next = Math.max(0, Math.min(MAX_PER_TYPE, r.count + delta));
+    if (delta > 0 && total - r.count + next > MAX_PER_SIDE) return;
+    r.count = next;
+    r.groups = r.count < 2 ? 1 : Math.min(r.groups || 1, r.count);
+    this._rebuildGroups(side);
+    this._renderSide(side);
   }
 
-  _refreshSetupTotals() {
-    const r = armyCount(this._setupComp.roman);
-    const h = armyCount(this._setupComp.barbarian);
-    const re = document.getElementById('rome-total');
-    const he = document.getElementById('horde-total');
+  _stepGroups(side, key, delta) {
+    const r = this._roster[side][key];
+    if (!r || r.count < 1) return;
+    r.groups = Math.max(1, Math.min(r.count, (r.groups || 1) + delta));
+    this._rebuildGroups(side);
+    this._renderSide(side);
+  }
+
+  // Rebuild the side's group list from the roster, preserving each group's
+  // formation/anchor/id by (type, index) so edits and selection survive.
+  _rebuildGroups(side) {
+    const old = this._setupGroups[side];
+    const result = [];
+    for (const typeKey of this._sideTypes(side)) {
+      const r = this._roster[side][typeKey];
+      if (!r || r.count <= 0) continue;
+      const g = Math.max(1, Math.min(r.groups || 1, r.count));
+      const counts = distributeCounts(r.count, g);
+      const prev = old.filter((x) => x.typeKey === typeKey);
+      counts.forEach((c, i) => {
+        result.push(prev[i] ? { ...prev[i], count: c } : this._newGroup(side, typeKey, c, result.length));
+      });
+    }
+    this._setupGroups[side] = result;
+    if (this._sel[side] && !result.some((g) => g.id === this._sel[side])) this._sel[side] = null;
+  }
+
+  _newGroup(side, typeKey, count, idx) {
+    const B = PLACEMENT_BOUNDS[side];
+    const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+    const dz = side === 'roman' ? 9 : -9;
+    const dir = side === 'roman' ? 1 : -1;
+    return {
+      id: ++this._gid, typeKey, count, formation: DEFAULT_FORMATION,
+      x: clamp(((idx % 5) - 2) * 6, B.xMin, B.xMax),
+      z: clamp(dz + dir * Math.floor(idx / 5) * 4, B.zMin, B.zMax),
+    };
+  }
+
+  // Legend under the map: one row per group with its formation selector; click
+  // a row (or its map marker) to select and reposition that group.
+  _renderLegend(hostId, side) {
+    const host = document.getElementById(hostId);
+    if (!host) return;
+    host.innerHTML = '';
+    const groups = this._setupGroups[side];
+    if (groups.length === 0) {
+      host.innerHTML = '<div class="grp-empty">No units yet — add some at left.</div>';
+      return;
+    }
+    const badges = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩', '⑪', '⑫'];
+    groups.forEach((grp, i) => {
+      const row = document.createElement('div');
+      row.className = 'grp-row' + (this._sel[side] === grp.id ? ' sel' : '');
+      row.innerHTML =
+        `<span class="grp-badge">${badges[i] || i + 1}</span>
+         <span class="grp-name">${UNIT_TYPES[grp.typeKey].label} ×${grp.count}</span>`;
+      const sel = document.createElement('select');
+      sel.className = 'grp-form';
+      for (const key of FORMATION_KEYS) {
+        const opt = document.createElement('option');
+        opt.value = key; opt.textContent = FORMATIONS[key].label;
+        if (key === grp.formation) opt.selected = true;
+        sel.appendChild(opt);
+      }
+      sel.addEventListener('pointerdown', (e) => e.stopPropagation());
+      sel.addEventListener('change', () => {
+        grp.formation = sel.value;
+        this._drawMap(this._sideIds(side).map, side);
+      });
+      row.appendChild(sel);
+      row.addEventListener('click', () => this._selectGroup(side, grp.id));
+      host.appendChild(row);
+    });
+  }
+
+  _selectGroup(side, id) {
+    this._sel[side] = id;
+    const ids = this._sideIds(side);
+    this._renderLegend(ids.legend, side);
+    this._drawMap(ids.map, side);
+  }
+
+  _refreshTotals() {
+    const r = this._sideCount('roman'), h = this._sideCount('barbarian');
+    const re = document.getElementById('rome-total'), he = document.getElementById('horde-total');
     if (re) re.textContent = r;
     if (he) he.textContent = h;
     document.getElementById('setup-start').disabled = r === 0 || h === 0;
   }
 
   // ---- Deployment mini-map ----------------------------------------------
-  // Draw a top-down plan of the side's half of the field with a dot per unit
-  // at its formation slot; the anchor handle can be dragged to reposition.
-  _mapUnits(side) {
-    const comp = this._setupComp[side];
-    const order = composeArmy(comp).sort((a, b) =>
-      (UNIT_TYPES[a].role === 'ranged' ? 1 : 0) - (UNIT_TYPES[b].role === 'ranged' ? 1 : 0));
-    const p = this._setupPlacement[side];
+  _groupUnits(side, grp) {
     const spacing = side === 'roman' ? 2.2 : 2.4;
-    const rowGap = order.length > 24 ? 1.75 : 1.9;
-    const slots = formationOffsets(p.formation, order.length, spacing, rowGap);
+    const rowGap = grp.count > 24 ? 1.75 : 1.9;
+    const slots = formationOffsets(grp.formation, grp.count, spacing, rowGap);
     const dir = side === 'roman' ? 1 : -1;
-    return order.map((key, i) => {
-      const s = slots[i] || { x: 0, depth: 0 };
-      return { x: p.x + s.x, z: p.z + dir * s.depth, ranged: UNIT_TYPES[key].role === 'ranged' };
-    });
+    return slots.map((s) => ({ x: grp.x + s.x, z: grp.z + dir * s.depth }));
   }
 
   // World (x,z) → canvas pixels. Forward (toward the foe) is always UP.
   _w2m(side, wx, wz, W, H) {
-    const cx = (wx + 28) / 56 * W;
-    const cy = side === 'roman' ? (wz + 28) / 56 * H : (28 - wz) / 56 * H;
-    return [cx, cy];
+    return [(wx + 28) / 56 * W, side === 'roman' ? (wz + 28) / 56 * H : (28 - wz) / 56 * H];
   }
 
   _drawMap(canvasId, side) {
@@ -229,41 +298,39 @@ export class UI {
     const W = cv.width, H = cv.height;
     const g = cv.getContext('2d');
     g.clearRect(0, 0, W, H);
-    // Field
-    g.fillStyle = 'rgba(74,90,52,0.35)';
-    g.fillRect(0, 0, W, H);
-    // Enemy half tint (top)
-    g.fillStyle = 'rgba(150,50,50,0.10)';
-    g.fillRect(0, 0, W, H / 2);
-    // Own half tint (bottom)
-    g.fillStyle = side === 'roman' ? 'rgba(70,120,220,0.10)' : 'rgba(199,120,60,0.12)';
-    g.fillRect(0, H / 2, W, H / 2);
-    // Midline
+    g.fillStyle = 'rgba(74,90,52,0.35)'; g.fillRect(0, 0, W, H);
+    g.fillStyle = 'rgba(150,50,50,0.10)'; g.fillRect(0, 0, W, H / 2);
+    g.fillStyle = side === 'roman' ? 'rgba(70,120,220,0.10)' : 'rgba(199,120,60,0.12)'; g.fillRect(0, H / 2, W, H / 2);
     g.strokeStyle = 'rgba(255,255,255,0.25)'; g.setLineDash([5, 5]);
     g.beginPath(); g.moveTo(0, H / 2); g.lineTo(W, H / 2); g.stroke(); g.setLineDash([]);
     g.fillStyle = 'rgba(255,255,255,0.4)'; g.font = '10px sans-serif'; g.textAlign = 'center';
     g.fillText('▲ enemy', W / 2, 12);
-    // Enemy formation (faint reference)
+    // Enemy groups (faint reference)
     const foe = side === 'roman' ? 'barbarian' : 'roman';
-    for (const u of this._mapUnits(foe)) {
-      const [x, y] = this._w2m(side, u.x, u.z, W, H);
-      g.fillStyle = 'rgba(200,90,90,0.35)';
-      g.beginPath(); g.arc(x, y, 2.4, 0, 7); g.fill();
+    for (const grp of this._setupGroups[foe]) {
+      for (const u of this._groupUnits(foe, grp)) {
+        const [x, y] = this._w2m(side, u.x, u.z, W, H);
+        g.fillStyle = 'rgba(200,90,90,0.30)';
+        g.beginPath(); g.arc(x, y, 2.2, 0, 7); g.fill();
+      }
     }
-    // Own units
-    const col = side === 'roman' ? '#5aa0ff' : '#e0964a';
-    const rangedCol = side === 'roman' ? '#9ec8ff' : '#f0c48a';
-    for (const u of this._mapUnits(side)) {
-      const [x, y] = this._w2m(side, u.x, u.z, W, H);
-      g.fillStyle = u.ranged ? rangedCol : col;
-      g.beginPath(); g.arc(x, y, 3.2, 0, 7); g.fill();
-    }
-    // Anchor handle
-    const p = this._setupPlacement[side];
-    const [ax, ay] = this._w2m(side, p.x, p.z, W, H);
-    g.strokeStyle = '#ffd24f'; g.lineWidth = 2;
-    g.beginPath(); g.arc(ax, ay, 7, 0, 7); g.stroke();
-    g.fillStyle = 'rgba(255,210,79,0.35)'; g.fill();
+    // Own groups
+    const col = side === 'roman' ? '90,160,255' : '224,150,74';
+    this._setupGroups[side].forEach((grp, i) => {
+      const on = this._sel[side] === grp.id;
+      for (const u of this._groupUnits(side, grp)) {
+        const [x, y] = this._w2m(side, u.x, u.z, W, H);
+        g.fillStyle = `rgba(${col},${on ? 0.95 : 0.5})`;
+        g.beginPath(); g.arc(x, y, 3.1, 0, 7); g.fill();
+      }
+      const [ax, ay] = this._w2m(side, grp.x, grp.z, W, H);
+      g.strokeStyle = on ? '#ffe08a' : 'rgba(255,210,79,0.7)'; g.lineWidth = on ? 3 : 1.5;
+      g.beginPath(); g.arc(ax, ay, on ? 9 : 7, 0, 7); g.stroke();
+      g.fillStyle = on ? 'rgba(255,210,79,0.35)' : 'rgba(255,210,79,0.15)'; g.fill();
+      g.fillStyle = '#fff2d0'; g.font = 'bold 10px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(String(i + 1), ax, ay);
+      g.textBaseline = 'alphabetic';
+    });
     g.lineWidth = 1;
   }
 
@@ -273,60 +340,87 @@ export class UI {
     cv._wired = true;
     const B = PLACEMENT_BOUNDS[side];
     const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-    const setFromEvent = (e) => {
+    const nearest = (px, py) => {
+      let best = null, bd = 1e9;
+      for (const grp of this._setupGroups[side]) {
+        const [ax, ay] = this._w2m(side, grp.x, grp.z, cv.width, cv.height);
+        const d = Math.hypot(ax - px, ay - py);
+        if (d < bd) { bd = d; best = grp; }
+      }
+      return bd < 28 ? best : null;
+    };
+    let drag = null;
+    const canvasXY = (e) => {
       const rect = cv.getBoundingClientRect();
-      const px = (e.clientX - rect.left) / rect.width * cv.width;
-      const py = (e.clientY - rect.top) / rect.height * cv.height;
+      return [(e.clientX - rect.left) / rect.width * cv.width, (e.clientY - rect.top) / rect.height * cv.height];
+    };
+    const moveTo = (grp, px, py) => {
       const wx = px / cv.width * 56 - 28;
       const wz = side === 'roman' ? py / cv.height * 56 - 28 : 28 - py / cv.height * 56;
-      const p = this._setupPlacement[side];
-      p.x = clamp(Math.round(wx), B.xMin, B.xMax);
-      p.z = clamp(Math.round(wz), B.zMin, B.zMax);
+      grp.x = clamp(Math.round(wx), B.xMin, B.xMax);
+      grp.z = clamp(Math.round(wz), B.zMin, B.zMax);
       this._drawMap(canvasId, side);
     };
-    let dragging = false;
-    cv.addEventListener('pointerdown', (e) => { dragging = true; cv.setPointerCapture(e.pointerId); setFromEvent(e); });
-    cv.addEventListener('pointermove', (e) => { if (dragging) setFromEvent(e); });
-    cv.addEventListener('pointerup', () => { dragging = false; });
-    cv.addEventListener('pointercancel', () => { dragging = false; });
+    cv.addEventListener('pointerdown', (e) => {
+      const [px, py] = canvasXY(e);
+      // grab the nearest group, or move the currently-selected one to here
+      let grp = nearest(px, py);
+      if (!grp && this._sel[side]) grp = this._setupGroups[side].find((x) => x.id === this._sel[side]);
+      if (!grp) return;
+      drag = grp; cv.setPointerCapture(e.pointerId);
+      this._selectGroup(side, grp.id);
+      moveTo(grp, px, py);
+    });
+    cv.addEventListener('pointermove', (e) => { if (drag) { const [px, py] = canvasXY(e); moveTo(drag, px, py); } });
+    cv.addEventListener('pointerup', () => { drag = null; });
+    cv.addEventListener('pointercancel', () => { drag = null; });
   }
 
   // ---- Location-tab quick actions ---------------------------------------
   _randomizeSetup() {
     const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+    const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
     this._setupEnv = pick(ENV_KEYS);
-    for (const [side, types] of [['roman', ROMAN_TYPES], ['barbarian', BARBARIAN_TYPES]]) {
-      const comp = {};
-      let budget = 6 + Math.floor(Math.random() * (MAX_PER_SIDE - 6));
-      const shuffled = types.slice().sort(() => Math.random() - 0.5);
-      for (const key of shuffled) {
-        if (budget <= 0) break;
-        const n = Math.min(budget, Math.floor(Math.random() * (MAX_PER_TYPE + 1)));
-        if (n > 0) { comp[key] = n; budget -= n; }
-      }
-      if (armyCount(comp) === 0) comp[types[0]] = 3;      // never empty
-      this._setupComp[side] = comp;
+    for (const side of ['roman', 'barbarian']) {
+      const types = this._sideTypes(side);
       const B = PLACEMENT_BOUNDS[side];
-      this._setupPlacement[side] = {
-        formation: pick(FORMATION_KEYS),
-        x: Math.round(B.xMin + Math.random() * (B.xMax - B.xMin)),
-        z: Math.round(B.zMin + Math.random() * (B.zMax - B.zMin)),
-      };
+      const nGroups = 2 + Math.floor(Math.random() * 3);   // 2–4 groups
+      const groups = [];
+      let budget = MAX_PER_SIDE;
+      for (let i = 0; i < nGroups && budget > 1; i++) {
+        const count = Math.min(budget, Math.min(MAX_PER_TYPE, 2 + Math.floor(Math.random() * 8)));
+        budget -= count;
+        groups.push({
+          id: ++this._gid, typeKey: pick(types), count, formation: pick(FORMATION_KEYS),
+          x: clamp(Math.round(B.xMin + Math.random() * (B.xMax - B.xMin)), B.xMin, B.xMax),
+          z: clamp(Math.round(B.zMin + Math.random() * (B.zMax - B.zMin)), B.zMin, B.zMax),
+        });
+      }
+      if (groups.length === 0) groups.push(this._newGroup(side, types[0], 3, 0));
+      this._setupGroups[side] = groups;
+      this._roster[side] = this._deriveRoster(side);
     }
+    this._sel = { roman: null, barbarian: null };
     this._renderAll();
   }
 
   _clearSetup() {
-    this._setupComp = { roman: {}, barbarian: {} };
+    this._setupGroups = { roman: [], barbarian: [] };
+    this._roster = { roman: {}, barbarian: {} };
+    this._sel = { roman: null, barbarian: null };
     this._setupEnv = DEFAULT_ENV;
-    this._setupPlacement = defaultPlacement();
     this._renderAll();
   }
 
   _defaultSetup() {
-    this._setupComp = { roman: { ...DEFAULT_ARMY.roman }, barbarian: { ...DEFAULT_ARMY.barbarian } };
+    const d = defaultGroups();
+    this._setupGroups = {
+      roman: d.roman.map((g) => ({ ...g, id: ++this._gid })),
+      barbarian: d.barbarian.map((g) => ({ ...g, id: ++this._gid })),
+    };
+    this._roster = { roman: this._deriveRoster('roman'), barbarian: this._deriveRoster('barbarian') };
+    this._sel = { roman: null, barbarian: null };
     this._setupEnv = DEFAULT_ENV;
-    this._setupPlacement = defaultPlacement();
     this._renderAll();
   }
 

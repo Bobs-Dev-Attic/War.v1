@@ -1,8 +1,23 @@
 import * as THREE from 'three';
 import { Unit } from './unit.js';
-import { DEFAULT_ARMY, composeArmy, UNIT_TYPES } from './unitTypes.js';
-import { formationOffsets, DEFAULT_FORMATION, defaultPlacement, PLACEMENT_BOUNDS } from './formations.js';
+import { DEFAULT_ARMY, UNIT_TYPES } from './unitTypes.js';
+import { formationOffsets, DEFAULT_FORMATION, PLACEMENT_BOUNDS } from './formations.js';
 import { ENVIRONMENTS, DEFAULT_ENV } from './environments.js';
+
+// A deployment is a list of GROUPS per side; each group is a block of one unit
+// type with its own count, formation and anchor position on the field. The
+// default lays one group per type, spread along the muster line.
+export function defaultGroups() {
+  const build = (army, side) => {
+    const keys = Object.keys(army);
+    const dz = side === 'roman' ? 9 : -9;
+    return keys.map((k, i) => ({
+      typeKey: k, count: army[k], formation: DEFAULT_FORMATION,
+      x: Math.round((i - (keys.length - 1) / 2) * 7), z: dz,
+    }));
+  };
+  return { roman: build(DEFAULT_ARMY.roman, 'roman'), barbarian: build(DEFAULT_ARMY.barbarian, 'barbarian') };
+}
 
 export class Game {
   constructor(world, ui) {
@@ -28,14 +43,10 @@ export class Game {
     this._dropGeo.rotateX(-Math.PI / 2);
     this._bloodDrop = new THREE.SphereGeometry(0.05, 5, 4);
 
-    // Current battle composition (editable via the New Battle screen).
-    this.composition = {
-      roman: { ...DEFAULT_ARMY.roman },
-      barbarian: { ...DEFAULT_ARMY.barbarian },
-    };
-    // Chosen battlefield and each side's formation + where they muster.
+    // Chosen battlefield and each side's deployment groups (editable via the
+    // New Battle screen). Each group: { typeKey, count, formation, x, z }.
     this.environment = DEFAULT_ENV;
-    this.placement = defaultPlacement();
+    this.groups = defaultGroups();
     if (world.applyEnvironment) world.applyEnvironment(ENVIRONMENTS[this.environment]);
 
     this.group = new THREE.Group();
@@ -48,27 +59,24 @@ export class Game {
   }
 
   spawnArmies() {
-    this._formation(composeArmy(this.composition.roman), 'roman');
-    this._formation(composeArmy(this.composition.barbarian), 'barbarian');
+    for (const grp of this.groups.roman) this._placeGroup(grp, 'roman');
+    for (const grp of this.groups.barbarian) this._placeGroup(grp, 'barbarian');
     this.ui.updateTally(this);
   }
 
-  _formation(typeKeys, faction) {
-    // Deploy the squad in the side's chosen formation at its chosen spot; the
-    // melee front sits nearest the foe and ranged units fall to the rear.
-    const order = typeKeys.slice().sort((a, b) => this._rankHint(a) - this._rankHint(b));
-    const p = (this.placement && this.placement[faction]) || defaultPlacement()[faction];
+  // Deploy one group: `count` units of one type in `formation`, anchored at
+  // (x, z), with ranks extending back toward the side's own edge.
+  _placeGroup(grp, faction) {
+    const n = grp.count | 0;
+    if (n <= 0) return;
     const spacing = faction === 'roman' ? 2.2 : 2.4;
-    // Pack deep armies a touch tighter so they stay inside the field.
-    const rowGap = order.length > 24 ? 1.75 : 1.9;
-    const slots = formationOffsets(p.formation || DEFAULT_FORMATION, order.length, spacing, rowGap);
-    const dir = faction === 'roman' ? 1 : -1;   // rows extend back toward own edge
-    order.forEach((key, i) => {
+    const rowGap = n > 24 ? 1.75 : 1.9;
+    const slots = formationOffsets(grp.formation || DEFAULT_FORMATION, n, spacing, rowGap);
+    const dir = faction === 'roman' ? 1 : -1;
+    for (let i = 0; i < n; i++) {
       const s = slots[i] || { x: 0, depth: 0 };
-      const x = p.x + s.x;
-      const z = p.z + dir * s.depth;
-      this._add(faction, new THREE.Vector3(x, 0, z), key);
-    });
+      this._add(faction, new THREE.Vector3(grp.x + s.x, 0, grp.z + dir * s.depth), grp.typeKey);
+    }
   }
 
   // Melee/pike up front (row 0, nearest the foe), ranged at the rear.
@@ -638,20 +646,14 @@ export class Game {
     }
   }
 
-  // Start a fresh battle with the given composition (from the setup screen).
-  startBattle(composition, settings) {
-    if (composition) {
-      this.composition = {
-        roman: { ...composition.roman },
-        barbarian: { ...composition.barbarian },
-      };
-    }
+  // Start a fresh battle with the given deployment (from the setup screen).
+  startBattle(settings) {
     if (settings) {
       if (settings.environment && ENVIRONMENTS[settings.environment]) this.environment = settings.environment;
-      if (settings.placement) {
-        this.placement = {
-          roman: { ...this.placement.roman, ...settings.placement.roman },
-          barbarian: { ...this.placement.barbarian, ...settings.placement.barbarian },
+      if (settings.groups) {
+        this.groups = {
+          roman: settings.groups.roman.map((g) => ({ ...g })),
+          barbarian: settings.groups.barbarian.map((g) => ({ ...g })),
         };
       }
     }
