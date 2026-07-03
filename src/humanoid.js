@@ -257,7 +257,7 @@ function attachEquipment(c, arms) {
     );
     pommel.position.y = 0.14;
     sword.add(pommel);
-    sword.rotation.x = -Math.PI / 2; // point forward when arm hangs
+    sword.rotation.x = 0; // blade in line with the forearm (points where the hand points)
     arms.right.hand.add(sword);
     arms.right.hand.userData.weaponTip = new THREE.Vector3(0, -0.55, 0);
   } else if (c.weapon === 'axe') {
@@ -276,7 +276,7 @@ function attachEquipment(c, arms) {
     const spike = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.14, 6), headMat);
     spike.position.y = 0.12;
     axe.add(spike);
-    axe.rotation.x = -Math.PI / 2;
+    axe.rotation.x = 0;
     arms.right.hand.add(axe);
     arms.right.hand.userData.weaponTip = new THREE.Vector3(0, -0.7, 0);
   } else if (c.weapon === 'club') {
@@ -295,7 +295,7 @@ function attachEquipment(c, arms) {
       spike.rotation.x = Math.sin(a) * 1.4;
       club.add(spike);
     }
-    club.rotation.x = -Math.PI / 2;
+    club.rotation.x = 0;
     arms.right.hand.add(club);
     arms.right.hand.userData.weaponTip = new THREE.Vector3(0, -0.7, 0);
   } else if (c.weapon === 'spear' || c.weapon === 'pike' || c.weapon === 'javelin') {
@@ -336,7 +336,7 @@ function attachEquipment(c, arms) {
       bl.castShadow = true;
       axe.add(bl);
     }
-    axe.rotation.x = -Math.PI / 2;
+    axe.rotation.x = 0;
     arms.right.hand.add(axe);
     arms.right.hand.userData.weaponTip = new THREE.Vector3(0, -0.92, 0);
     arms.left.shoulder.userData.grip = { x: 0.7, z: -0.3 }; // two-handed
@@ -352,7 +352,7 @@ function attachEquipment(c, arms) {
     head.position.y = -0.82;
     head.castShadow = true;
     maul.add(head);
-    maul.rotation.x = -Math.PI / 2;
+    maul.rotation.x = 0;
     arms.right.hand.add(maul);
     arms.right.hand.userData.weaponTip = new THREE.Vector3(0, -0.82, 0);
     arms.left.shoulder.userData.grip = { x: 0.7, z: -0.3 };
@@ -393,7 +393,7 @@ function attachEquipment(c, arms) {
       shield.add(bar);
     }
     shield.position.set(0, -0.15, 0.14);
-    shield.rotation.set(0.1, 0, 0);
+    shield.rotation.set(-Math.PI / 2, 0, 0);   // stand it upright, face to the foe
     arms.left.hand.add(shield);
     // Keep left arm bent to hold shield in front.
     arms.left.shoulder.userData.hold = { x: 0.5, z: 0.25 };
@@ -410,6 +410,7 @@ function attachEquipment(c, arms) {
     boss.position.z = 0.06;
     shield.add(boss);
     shield.position.set(0, -0.15, 0.14);
+    shield.rotation.set(-Math.PI / 2, 0, 0);   // face to the foe
     arms.left.hand.add(shield);
     arms.left.shoulder.userData.hold = { x: 0.5, z: 0.25 };
     arms.left.elbow.userData.hold = { x: 1.1 };
@@ -425,6 +426,7 @@ function attachEquipment(c, arms) {
     boss.position.z = 0.05;
     shield.add(boss);
     shield.position.set(0, -0.15, 0.14);
+    shield.rotation.set(-Math.PI / 2, 0, 0);   // face to the foe
     arms.left.hand.add(shield);
     arms.left.shoulder.userData.hold = { x: 0.5, z: 0.25 };
     arms.left.elbow.userData.hold = { x: 1.1 };
