@@ -60,10 +60,13 @@ export class Unit {
     this.twoHanded = cfg.weapon === 'greataxe' || cfg.weapon === 'maul';
     this.isBow = cfg.weapon === 'bow';
     this.mounted = !!cfg.mounted;
+    this.siege = !!cfg.siege;
+    this.siegeKind = cfg.siege || null;
     this.shoveCooldown = Math.random() * 1.5;
     const built = buildHumanoid(cfg);
     this.root = built.root;
     this.j = built.joints;
+    this.siegeArm = built.siegeArm || null;
     this.horse = built.horse;
     this.horseLegs = built.horseLegs;
     this.horseHead = built.horseHead;
@@ -87,10 +90,11 @@ export class Unit {
     this.root.position.copy(position);
     // Subtle per-soldier build: the burly stand a touch taller and broader;
     // elite champions (Praetorian, Chieftain) stand out a little more.
-    const scale = (0.94 + THREE.MathUtils.clamp((this.stats.build - 11) / 12, -0.06, 0.12)) * (this.elite ? 1.08 : 1);
+    let scale = (0.94 + THREE.MathUtils.clamp((this.stats.build - 11) / 12, -0.06, 0.12)) * (this.elite ? 1.08 : 1);
+    if (this.siege) scale = 1;
     this.root.scale.setScalar(scale);
-    // Cavalry have a much bigger footprint than a lone soldier.
-    this.radius = (this.mounted ? 0.95 : 0.5) * scale;
+    // Cavalry — and, more so, siege engines — have a much bigger footprint.
+    this.radius = (this.siege ? 1.15 : this.mounted ? 0.95 : 0.5) * scale;
     this.root.userData.unit = this;
     this.root.traverse((o) => { o.userData.unit = this; });
 
@@ -153,7 +157,7 @@ export class Unit {
     this.fill = fill;
     bar.add(bg);
     bar.add(fill);
-    bar.position.y = this.mounted ? 2.95 : 2.15;   // clear the mounted rider's head
+    bar.position.y = this.siege ? 2.7 : this.mounted ? 2.95 : 2.15;   // clear the rider's head / engine frame
     bar.renderOrder = 999;
     bg.material.depthTest = false;
     fill.material.depthTest = false;
@@ -162,7 +166,7 @@ export class Unit {
   }
 
   _buildSelectionRing() {
-    const rr = this.mounted ? 1.05 : 0.55;
+    const rr = this.siege ? 1.3 : this.mounted ? 1.05 : 0.55;
     const ring = new THREE.Mesh(
       new THREE.RingGeometry(rr, rr + 0.17, 32),
       new THREE.MeshBasicMaterial({
@@ -225,12 +229,18 @@ export class Unit {
     this.healthBar.visible = false;
     this.selectionRing.visible = false;
     if (game) {
-      // Drop weapon and shield, and bleed out where you fall.
-      this._dropWeapon(game);
-      this._dropShield(game);
-      this._v.set(this.position.x, 1.1, this.position.z);
-      game.spawnBlood(this._v, { x: this._deathDir, z: 0 }, 16, 1.3);
-      game.spawnDecal(this.position.x, this.position.z, 0.55, 0.85);
+      if (this.siege) {
+        // A wrecked engine throws up a cloud of dust and splinters, not blood.
+        game.spawnDust(this.position.x, this.position.z, 20, 2.4);
+        game.spawnDecal(this.position.x, this.position.z, 1.0, 0.6);
+      } else {
+        // Drop weapon and shield, and bleed out where you fall.
+        this._dropWeapon(game);
+        this._dropShield(game);
+        this._v.set(this.position.x, 1.1, this.position.z);
+        game.spawnBlood(this._v, { x: this._deathDir, z: 0 }, 16, 1.3);
+        game.spawnDecal(this.position.x, this.position.z, 0.55, 0.85);
+      }
     }
   }
 
@@ -449,6 +459,10 @@ export class Unit {
     // Shield-bearers told to Stand Ground brace defensively.
     this.defensive = this.order === 'hold' && this.hasShield && !this.disarmed;
     if (this.order !== 'hold') this._inWall = 0;
+
+    // Siege engines are emplaced artillery — they hold their ground, traverse to
+    // aim, and loose heavy shots. No marching, no melee.
+    if (this.siege) { this._siegeUpdate(dt, game); this._finishFrame(game); return; }
 
     // The horse is mid-rear or mid-kick — play it out before anything else.
     if (this.horseMove) { this._advanceHorseMove(dt, game); this._finishFrame(game); return; }
@@ -780,10 +794,88 @@ export class Unit {
   }
 
   _fireProjectile(m, game) {
+    if (this.siege) {
+      // The loaded round leaves the arm — hide it until the crew reloads.
+      if (this.siegeArm && this.siegeArm.userData.ammo) this.siegeArm.userData.ammo.visible = false;
+      const aim = this._siegeAim || (this._comboTarget
+        ? { x: this._comboTarget.position.x, z: this._comboTarget.position.z } : null);
+      if (!aim) return;
+      const dmg = this.stats.dmg * (this.ranged.dmgMul || 1);
+      game.spawnSiegeProjectile(this, aim, m.projectile, dmg, this.ranged.aoe || 0, this._comboTarget);
+      return;
+    }
     const tgt = this._comboTarget;
     if (!tgt || !tgt.alive || tgt.hasSurrendered) return;
     const dmg = this.stats.dmg * (this.ranged.dmgMul || 1);
     game.spawnProjectile(this, tgt, m.projectile, dmg);
+  }
+
+  // ---- Siege engine AI ---------------------------------------------------
+  _siegeUpdate(dt, game) {
+    if (this.move) { this._advanceMove(dt, game); return; }
+    if (this.hasSurrendered) return;
+    const aim = this._pickSiegeTarget(game);
+    if (aim) this._faceGround(aim.x, aim.z, dt);
+    if (aim && this.rangedCooldown <= 0 && this.attackCooldown <= 0) {
+      this._siegeAim = { x: aim.x, z: aim.z };
+      this._comboTarget = aim.unit || null;
+      this._startMove(this.siegeKind === 'ballista' ? 'ballistaFire' : 'catapultFire');
+    } else {
+      this._animateSiegeIdle(dt);
+    }
+  }
+
+  // Choose where to shoot. Boulders favour the densest enemy knot and steer
+  // clear of our own troops (no lobbing rocks into a friendly melee); bolts pick
+  // the nearest foe in range.
+  _pickSiegeTarget(game) {
+    const rg = this.ranged;
+    const aoe = rg.aoe || 0;
+    const enemies = game.units.filter((u) => u.faction !== this.faction && u.alive && !u.hasSurrendered);
+    if (!enemies.length) return null;
+    const total = game.livingRomans().length + game.livingHorde().length;
+    const endgame = total <= 4;
+    const friends = aoe > 0
+      ? game.units.filter((u) => u !== this && u.faction === this.faction && u.alive && !u.hasSurrendered)
+      : null;
+    let best = null, bestScore = -1;
+    for (const e of enemies) {
+      const d = Math.hypot(e.position.x - this.position.x, e.position.z - this.position.z);
+      if (d < rg.min || d > rg.max) continue;
+      let score = 1;
+      if (aoe > 0) {
+        score = 0;
+        for (const o of enemies) if (Math.hypot(o.position.x - e.position.x, o.position.z - e.position.z) <= aoe) score++;
+        if (!endgame) {
+          let nearFriend = false;
+          for (const f of friends) if (Math.hypot(f.position.x - e.position.x, f.position.z - e.position.z) <= aoe + 1.0) { nearFriend = true; break; }
+          if (nearFriend) continue;                 // would catch our own — hold this shot
+        }
+      } else {
+        score = 100 - d;                            // bolt: just take the nearest in range
+      }
+      if (score > bestScore) { bestScore = score; best = e; }
+    }
+    return best ? { x: best.position.x, z: best.position.z, unit: aoe > 0 ? null : best } : null;
+  }
+
+  _faceGround(x, z, dt) {
+    this._desiredFacing = Math.atan2(x - this.position.x, z - this.position.z);
+    this._turn(dt);
+  }
+
+  _animateSiegeIdle(dt) {
+    this.animT += dt;
+    if (this.siegeArm) {
+      // Ease the arm back to its loaded rest pose while the crew reloads.
+      if (this.siegeKind === 'ballista') {
+        this.siegeArm.position.z += (-0.15 - this.siegeArm.position.z) * Math.min(1, dt * 4);
+      } else {
+        this.siegeArm.rotation.x += (-1.15 - this.siegeArm.rotation.x) * Math.min(1, dt * 3);
+      }
+      if (this.siegeArm.userData.ammo) this.siegeArm.userData.ammo.visible = this.rangedCooldown <= 0.05;
+    }
+    this._recover(dt);
   }
 
   // Resolve an attack's impact frame against its target(s).
@@ -868,27 +960,29 @@ export class Unit {
   }
 
   // Resolve an arrow/javelin striking home.
-  receiveRanged(shooter, dmg, game) {
+  receiveRanged(shooter, dmg, game, opts = null) {
     if (!this.alive || this.hasSurrendered) return;
-    if (this.hasShield && Math.random() < this.stats.block * 0.7) {
+    const pierce = opts && opts.pierce;               // ballista bolts punch through shields
+    if (!pierce && this.hasShield && Math.random() < this.stats.block * 0.7) {
       game.spawnHitSpark(this.position, this.faction, false);
       game.floatingText(this.position, 'block', 0xdedede, 0.75);
       return;
     }
-    if (Math.random() < this.stats.dodge * 0.5) {
+    if (!pierce && Math.random() < this.stats.dodge * 0.5) {
       game.floatingText(this.position, 'dodge', 0x8fd0ff, 0.75);
       return;
     }
     const finalDmg = dmg * (1 - this.stats.toughness) * (0.9 + Math.random() * 0.2);
     const dir = Math.sign(this.position.x - shooter.position.x) || 1;
     const wasAlive = this.alive;
-    this.applyDamage(finalDmg, dir, false, game);
+    this.applyDamage(finalDmg, dir, !!pierce, game);
     game.spawnHitSpark(this.position, shooter.faction, false);
     this._v.set(this.position.x, 1.2, this.position.z);
-    game.spawnBlood(this._v, { x: dir, z: 0 }, 6, 0.8);
+    game.spawnBlood(this._v, { x: dir, z: 0 }, pierce ? 12 : 6, pierce ? 1.2 : 0.8);
     game.floatingText(this.position, `${Math.round(finalDmg)}`,
       shooter.faction === 'roman' ? 0xffe0a0 : 0xff9a70, 1);
-    if (wasAlive && !this.alive && Math.random() < 0.3) this._severRandom(true, shooter, game);
+    const severChance = (opts && opts.severChance) || 0.3;
+    if (wasAlive && !this.alive && Math.random() < severChance) this._severRandom(true, shooter, game);
   }
 
   _interruptWith(name, attacker) {

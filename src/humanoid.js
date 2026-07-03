@@ -84,8 +84,71 @@ function buildHorse(c) {
   return { group: g, legs, head: headG, body };
 }
 
+// A simple non-articulated crew figure to man a siege engine.
+function crewFigure(c) {
+  const g = new THREE.Group();
+  const skin = c.skin || 0xc98a5a;
+  const torso = box(0.32, 0.42, 0.2, c.torso || 0x8a6a3a, 0.8); torso.position.y = 1.0; g.add(torso);
+  const head = box(0.2, 0.22, 0.2, skin, 0.6); head.position.y = 1.33; g.add(head);
+  if (c.helmet) { const helm = cyl(0.12, 0.13, 0.14, c.armor || 0xb8b8c0, 10, 0.35, 0.6); helm.position.y = 1.42; g.add(helm); }
+  for (const sx of [-0.11, 0.11]) { const leg = box(0.11, 0.5, 0.13, c.skirt || 0x3a2a18, 0.85); leg.position.set(sx, 0.5, 0); g.add(leg); }
+  for (const sx of [-0.24, 0.24]) { const arm = box(0.1, 0.36, 0.1, skin, 0.7); arm.position.set(sx, 1.02, 0.04); arm.rotation.x = -0.5; g.add(arm); }
+  return g;
+}
+
+// A siege engine: a wheeled timber frame carrying either a torsion catapult
+// (onager / stone-thrower — a throwing arm that snaps up into a stop-beam and
+// hurls a boulder) or a ballista (a giant horizontal bolt-thrower). The
+// throwing arm / bow is a Group (`siegeArm`) the Unit animates on firing; a
+// static crew figure mans the rear. It carries the standard humanoid joint
+// names as detached dummies so the shared animation code never faults.
+function buildSiege(c) {
+  const root = new THREE.Group();
+  const wood = c.frame || 0x6a4726;
+  const dark = 0x3a2712;
+  const kind = c.siege;                        // 'onager' | 'ballista' | 'stonethrower'
+
+  const base = new THREE.Group(); root.add(base);
+  for (const sx of [-0.42, 0.42]) { const beam = box(0.16, 0.16, 2.0, wood, 0.85); beam.position.set(sx, 0.42, 0); base.add(beam); }
+  for (const z of [-0.8, 0.8]) { const cb = box(1.0, 0.14, 0.16, wood, 0.85); cb.position.set(0, 0.42, z); base.add(cb); }
+  for (const sx of [-0.52, 0.52]) for (const z of [-0.7, 0.7]) {
+    const wheel = cyl(0.3, 0.3, 0.12, dark, 12, 0.9); wheel.rotation.z = Math.PI / 2; wheel.position.set(sx, 0.3, z); base.add(wheel);
+  }
+
+  const siegeArm = new THREE.Group();
+  if (kind === 'ballista') {
+    const post = box(0.14, 0.8, 0.16, wood, 0.85); post.position.set(0, 0.85, -0.15); base.add(post);
+    const trough = box(0.14, 0.1, 1.5, wood, 0.85); trough.position.set(0, 1.2, 0.35); root.add(trough);
+    siegeArm.position.set(0, 1.2, -0.15); root.add(siegeArm);
+    for (const sx of [-1, 1]) { const limb = box(0.07, 0.09, 0.66, dark, 0.8); limb.position.set(sx * 0.4, 0, 0); limb.rotation.y = sx * 0.3; siegeArm.add(limb); }
+    const str = box(0.86, 0.035, 0.035, 0x2a2018, 0.7); str.position.set(0, 0, 0.12); siegeArm.add(str);
+    const bolt = box(0.05, 0.05, 1.0, 0x8a6a3a, 0.7); bolt.position.set(0, 1.28, 0.2); root.add(bolt); siegeArm.userData.ammo = bolt;
+  } else {
+    const stop = box(1.0, 0.5, 0.16, wood, 0.85); stop.position.set(0, 0.95, -0.8); base.add(stop);
+    const bundle = cyl(0.18, 0.18, 0.9, 0x4a3420, 10, 0.85); bundle.rotation.z = Math.PI / 2; bundle.position.set(0, 0.6, 0.7); base.add(bundle);
+    siegeArm.position.set(0, 0.6, 0.7); root.add(siegeArm);
+    const armBeam = box(0.13, 0.13, 1.5, wood, 0.85); armBeam.position.set(0, 0, -0.6); siegeArm.add(armBeam);
+    const bucket = cyl(0.2, 0.14, 0.16, dark, 10, 0.9); bucket.position.set(0, 0.04, -1.28); siegeArm.add(bucket);
+    const stone = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), new THREE.MeshStandardMaterial({ color: 0x8f8f95, roughness: 0.95 }));
+    stone.position.set(0, 0.14, -1.28); siegeArm.add(stone); siegeArm.userData.ammo = stone;
+    siegeArm.rotation.x = -1.15;                // laid back, loaded
+  }
+
+  const crew = crewFigure(c); crew.position.set(0.6, 0, 0.95); crew.rotation.y = -0.3; root.add(crew);
+
+  root.traverse((o) => { if (o.isMesh) o.matrixAutoUpdate = true; });
+
+  const joints = { siegeArm };
+  for (const n of ['body', 'chest', 'head', 'leftHip', 'leftKnee', 'rightHip', 'rightKnee',
+    'leftShoulder', 'leftElbow', 'leftHand', 'rightShoulder', 'rightElbow', 'rightHand']) {
+    joints[n] = new THREE.Group();
+  }
+  return { root, horse: null, horseLegs: null, horseHead: null, horseBody: null, joints, siegeArm };
+}
+
 export function buildHumanoid(cfg) {
   const c = cfg;
+  if (c.siege) return buildSiege(c);
   const root = new THREE.Group();
   const body = new THREE.Group();
   root.add(body);

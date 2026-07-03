@@ -79,12 +79,29 @@ attack patterns (`src/unitTypes.js`):
 **Rome** — Legionary (gladius + scutum), Hastatus (spear), Triarius (long pike,
 braced wall), Sagittarius (bow, kites & volleys), Veles (javelin skirmisher),
 Praetorian (elite guard), **Eques (cavalry — a swift, lance-armed lancer on
-horseback)**.
+horseback)**, **Onager (catapult — lobs a bursting boulder)** and **Ballista
+(a shield-piercing bolt-thrower)**.
 
 **The Horde** — Warrior (axe + shield), Berserker (greataxe, no shield, huge
 damage), Marauder (great maul, staggering smashes), Raider (spear + shield),
 Hunter (bow), Chieftain (towering elite champion), **Outrider (mounted axe
-raider — fast, hard-hitting horse cavalry)**.
+raider — fast, hard-hitting horse cavalry)** and **Stone Thrower (a crude
+war-sling catapult)**.
+
+### Siege engines
+
+Heavy artillery is emplaced behind the line — wheeled timber engines, manned by a
+crew, that hold their ground, traverse to aim, and loose punishing shots at long
+range (they don't march or fight hand-to-hand, and they're tougher but killable —
+a wrecked engine bursts into dust and splinters):
+
+- **Catapults** (Roman **Onager**, barbarian **Stone Thrower**) lob a **boulder**
+  in a high arc that **bursts on impact**, smashing and knocking flat *every* unit
+  in the blast — worst at the centre. The crew won't drop a rock onto their own
+  melee: they pick the densest enemy knot that's clear of friendly troops, so
+  artillery bombards the massed advance and falls quiet once the lines close.
+- The **Ballista** throws a flat, fast **bolt** that **punches straight through
+  shields** to skewer a single target — deadly counter-battery and champion-killer.
 
 **Cavalry** ride articulated horses that gallop into battle; they move far faster
 than infantry and carry a bigger reach, at a higher point cost. A warhorse is its
