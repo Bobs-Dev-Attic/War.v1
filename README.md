@@ -103,8 +103,9 @@ a wrecked engine bursts into dust and splinters):
 - The **Ballista** throws a flat, fast **bolt** that **punches straight through
   shields** to skewer a single target — deadly counter-battery and champion-killer.
 
-**Cavalry** ride articulated horses that gallop into battle; they move far faster
-than infantry and carry a bigger reach, at a higher point cost. A warhorse is its
+**Cavalry** ride articulated horses that gallop into battle; a mount at full
+health moves **at least twice as fast** as the quickest foot soldier and carries a
+bigger reach, at a higher point cost. A warhorse is its
 own creature: it has its own health and a heavy footprint that **tramples** lighter
 infantry aside, it **rears** to strike foes ahead and **kicks** out at those behind
 (staggering, high-damage hoof blows), and it **bounds over** obstacles mid-gallop.
