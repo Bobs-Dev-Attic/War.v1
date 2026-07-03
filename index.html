@@ -112,8 +112,14 @@
             <div class="deploy-editor">
               <div class="deploy-mapwrap">
                 <canvas id="field-map" width="460" height="460"></canvas>
-                <!-- Marker config dialog (popover over the map) -->
-                <div class="marker-dialog" id="marker-dialog" hidden>
+              </div>
+              <div class="deploy-side">
+                <div class="deploy-totals">
+                  <span class="dt rome">🦅 Rome <b id="rome-total">0</b></span>
+                  <span class="dt horde">🪓 Horde <b id="horde-total">0</b></span>
+                </div>
+                <!-- Marker config form — expands here when a marker is selected -->
+                <div class="marker-form" id="marker-dialog" hidden>
                   <div class="md-head">
                     <span class="md-side rome" id="md-side">🦅 Rome</span>
                     <button class="md-close" id="md-close" title="Close">×</button>
@@ -134,13 +140,7 @@
                     <button class="md-done" id="md-done">Done</button>
                   </div>
                 </div>
-              </div>
-              <div class="deploy-side">
-                <div class="deploy-totals">
-                  <span class="dt rome">🦅 Rome <b id="rome-total">0</b></span>
-                  <span class="dt horde">🪓 Horde <b id="horde-total">0</b></span>
-                </div>
-                <p class="deploy-hint" id="deploy-hint">Click the battlefield to place a unit group. The top half is the Horde's, the bottom is Rome's. Click or drag a marker to move it; click again to edit or remove.</p>
+                <p class="deploy-hint" id="deploy-hint">Click the battlefield to place a unit group. The top half is the Horde's, the bottom is Rome's. Click or drag a marker to move it; click a marker to edit it here.</p>
                 <div class="deploy-list" id="deploy-list"></div>
               </div>
             </div>

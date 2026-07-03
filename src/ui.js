@@ -396,7 +396,10 @@ export class UI {
     document.getElementById('md-rot').textContent = '⟳ ' + (grp.rot || 0) + '°';
     document.getElementById('md-desc').textContent = UNIT_TYPES[grp.typeKey].desc;
     dlg.hidden = false;
+    const hint = document.getElementById('deploy-hint');
+    if (hint) hint.hidden = true;                 // the expanded form replaces the hint
     this._drawField();
+    this._renderDeployList();
   }
 
   _fillCountSelect(side, grp) {
@@ -441,6 +444,8 @@ export class UI {
     this._editing = null;
     const dlg = document.getElementById('marker-dialog');
     if (dlg) dlg.hidden = true;
+    const hint = document.getElementById('deploy-hint');
+    if (hint) hint.hidden = false;
     this._drawField();
     this._renderDeployList();
   }
