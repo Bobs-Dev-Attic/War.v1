@@ -111,6 +111,19 @@ export class Game {
     return out;
   }
 
+  // Every living ally of `unit` (excluding itself) within radius r — used for
+  // formation cohesion (closing ranks on Stand Ground, dressing the battle line).
+  alliesWithin(unit, r) {
+    const out = [];
+    const r2 = r * r;
+    for (const u of this.units) {
+      if (u === unit || u.faction !== unit.faction) continue;
+      if (!u.alive || u.hasSurrendered) continue;
+      if (unit.position.distanceToSquared(u.position) <= r2) out.push(u);
+    }
+    return out;
+  }
+
   nearestEnemy(unit) {
     let best = null;
     let bestD = Infinity;
@@ -590,7 +603,10 @@ export class Game {
         const b = list[j];
         let dx = b.position.x - a.position.x;
         let dz = b.position.z - a.position.z;
-        const min = a.radius + b.radius;
+        // Braced shield walls pack tighter — soldiers overlap shields shoulder to
+        // shoulder — so separation uses a reduced radius while mass (below) stays
+        // true to body size.
+        const min = a.collisionRadius() + b.collisionRadius();
         let d2 = dx * dx + dz * dz;
         if (d2 >= min * min) continue;
         if (d2 < 1e-6) {

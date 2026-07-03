@@ -103,8 +103,8 @@ when a foe closes; pikes and spears out-reach swords; shields catch arrows.
 
 | Command | Key | Effect |
 | --- | --- | --- |
-| ⚔️ **Attack** | `Q` | Advance and engage the nearest enemy. |
-| 🛡️ **Stand Ground** | `W` | Hold position; only strike foes that come in range. |
+| ⚔️ **Attack** | `Q` | Advance as a battle line and engage the nearest enemy. |
+| 🛡️ **Stand Ground** | `W` | Close ranks into a shield wall; only strike foes that come in range. |
 | 🏃 **Retreat** | `E` | Fall back to the legion's edge of the field. |
 | 🏳️ **Surrender** | `R` | Lay down arms — units kneel, drop weapons and yield. |
 
@@ -158,6 +158,22 @@ ones ("mix & match") — so no two exchanges look alike. When a blow lands the
 evade, hop aside), a shield-bearer may **block** (chip damage only), and
 telegraphed heavy attacks are easier to read. Bashes knock foes back; committed
 attackers trade blows.
+
+### Historical tactics — the shield wall & the battle line
+
+Orders aren't just individual behaviours — troops fight as a body:
+
+- **Stand Ground → shield wall.** Ordered to hold, soldiers **close ranks**,
+  shuffling in tight with nearby holding comrades to lock a shared wall (a Roman
+  **testudo**, a barbarian **skjaldborg**) that faces the foe. Braced shields
+  overlap so the line packs shoulder to shoulder, and a formed wall — two or more
+  bracing side by side — is **markedly harder to break** (a real shield-wall block
+  bonus on top of the lone-shield brace).
+- **Attack → battle line.** On the approach, an aggressive line **dresses its
+  ranks** — each soldier steers at the foe but keeps a little lateral cohesion, so
+  the troops arrive and strike **together** instead of stringing out into a
+  scattered rush. Closing speed is untouched, so charges still connect. (Cavalry
+  charge freely, unbound by the line.)
 
 **Stand Ground** is a genuine defensive posture: Romans hold the line, brace
 behind raised shields (better block & dodge), and periodically **shove** pressing
