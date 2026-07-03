@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { Unit } from './unit.js';
 import { DEFAULT_ARMY, composeArmy, UNIT_TYPES } from './unitTypes.js';
-import { formationOffsets, DEFAULT_FORMATION } from './formations.js';
+import { formationOffsets, DEFAULT_FORMATION, defaultPlacement, PLACEMENT_BOUNDS } from './formations.js';
 import { ENVIRONMENTS, DEFAULT_ENV } from './environments.js';
 
 export class Game {
@@ -33,9 +33,9 @@ export class Game {
       roman: { ...DEFAULT_ARMY.roman },
       barbarian: { ...DEFAULT_ARMY.barbarian },
     };
-    // Chosen battlefield and each side's starting formation.
+    // Chosen battlefield and each side's formation + where they muster.
     this.environment = DEFAULT_ENV;
-    this.formations = { roman: DEFAULT_FORMATION, barbarian: DEFAULT_FORMATION };
+    this.placement = defaultPlacement();
     if (world.applyEnvironment) world.applyEnvironment(ENVIRONMENTS[this.environment]);
 
     this.group = new THREE.Group();
@@ -48,25 +48,26 @@ export class Game {
   }
 
   spawnArmies() {
-    // Romans form up on the south edge (defenders); the horde masses to the north.
-    this._formation(composeArmy(this.composition.roman), 'roman', 9, 2.2);
-    this._formation(composeArmy(this.composition.barbarian), 'barbarian', -9, 2.4);
+    this._formation(composeArmy(this.composition.roman), 'roman');
+    this._formation(composeArmy(this.composition.barbarian), 'barbarian');
     this.ui.updateTally(this);
   }
 
-  _formation(typeKeys, faction, line, spacing) {
-    // Deploy the squad in the side's chosen formation, facing the enemy; the
+  _formation(typeKeys, faction) {
+    // Deploy the squad in the side's chosen formation at its chosen spot; the
     // melee front sits nearest the foe and ranged units fall to the rear.
     const order = typeKeys.slice().sort((a, b) => this._rankHint(a) - this._rankHint(b));
+    const p = (this.placement && this.placement[faction]) || defaultPlacement()[faction];
+    const spacing = faction === 'roman' ? 2.2 : 2.4;
     // Pack deep armies a touch tighter so they stay inside the field.
     const rowGap = order.length > 24 ? 1.75 : 1.9;
-    const shape = (this.formations && this.formations[faction]) || DEFAULT_FORMATION;
-    const slots = formationOffsets(shape, order.length, spacing, rowGap);
-    const dir = faction === 'roman' ? 1 : -1;
+    const slots = formationOffsets(p.formation || DEFAULT_FORMATION, order.length, spacing, rowGap);
+    const dir = faction === 'roman' ? 1 : -1;   // rows extend back toward own edge
     order.forEach((key, i) => {
       const s = slots[i] || { x: 0, depth: 0 };
-      const z = line + dir * s.depth;
-      this._add(faction, new THREE.Vector3(s.x, 0, z), key);
+      const x = p.x + s.x;
+      const z = p.z + dir * s.depth;
+      this._add(faction, new THREE.Vector3(x, 0, z), key);
     });
   }
 
@@ -647,7 +648,12 @@ export class Game {
     }
     if (settings) {
       if (settings.environment && ENVIRONMENTS[settings.environment]) this.environment = settings.environment;
-      if (settings.formations) this.formations = { ...this.formations, ...settings.formations };
+      if (settings.placement) {
+        this.placement = {
+          roman: { ...this.placement.roman, ...settings.placement.roman },
+          barbarian: { ...this.placement.barbarian, ...settings.placement.barbarian },
+        };
+      }
     }
     this.reset();
   }

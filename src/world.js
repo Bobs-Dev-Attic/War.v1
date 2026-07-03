@@ -393,7 +393,8 @@ export class World {
       for (const side of [-1, 1]) {
         const pivot = new THREE.Group();
         const wing = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.55), mat);
-        wing.rotation.x = -Math.PI / 2;      // lie flat (horizontal surface)
+        // Wings stand upright (broad face fore/aft) so they read clearly from
+        // the low isometric camera; the hinge still beats the tips up and down.
         wing.rotation.z = -side * 0.14;      // slight sweep-back at the tip
         wing.position.set(side * 0.7, 0, -0.05); // inner edge at hinge, reaches out
         pivot.add(wing);

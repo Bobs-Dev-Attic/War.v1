@@ -20,6 +20,28 @@ export const FORMATIONS = {
 export const FORMATION_KEYS = Object.keys(FORMATIONS);
 export const DEFAULT_FORMATION = 'line';
 
+// Where each side musters: the front-line depth (z) and lateral offset (x) of
+// the formation anchor, plus the chosen shape. Rows extend back from the front
+// line toward the side's own edge. Romans hold the south (+z), the horde north.
+export const DEFAULT_PLACEMENT = {
+  roman: { formation: DEFAULT_FORMATION, x: 0, z: 9 },
+  barbarian: { formation: DEFAULT_FORMATION, x: 0, z: -9 },
+};
+
+// Valid range for a side's anchor so armies stay in the field and on their own
+// half (a small no-man's-land is kept at the centre).
+export const PLACEMENT_BOUNDS = {
+  roman: { xMin: -18, xMax: 18, zMin: 3, zMax: 16 },
+  barbarian: { xMin: -18, xMax: 18, zMin: -16, zMax: -3 },
+};
+
+export function defaultPlacement() {
+  return {
+    roman: { ...DEFAULT_PLACEMENT.roman },
+    barbarian: { ...DEFAULT_PLACEMENT.barbarian },
+  };
+}
+
 const MAX_ROWS = 8;   // keep the deepest formation inside the field
 
 // Deterministic tiny jitter so skirmish lines look loose but reproducible-ish.

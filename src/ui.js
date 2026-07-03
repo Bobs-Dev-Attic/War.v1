@@ -1,7 +1,7 @@
 import { ATTRS, ATTR_LABELS } from './attributes.js';
-import { UNIT_TYPES, ROMAN_TYPES, BARBARIAN_TYPES, armyCount } from './unitTypes.js';
-import { ENVIRONMENTS, ENV_KEYS } from './environments.js';
-import { FORMATIONS, FORMATION_KEYS } from './formations.js';
+import { UNIT_TYPES, ROMAN_TYPES, BARBARIAN_TYPES, DEFAULT_ARMY, composeArmy, armyCount } from './unitTypes.js';
+import { ENVIRONMENTS, ENV_KEYS, DEFAULT_ENV } from './environments.js';
+import { FORMATIONS, FORMATION_KEYS, formationOffsets, defaultPlacement, PLACEMENT_BOUNDS } from './formations.js';
 
 // The engine handles large armies comfortably (collision/AI are cheap and the
 // formation packs deep armies inside the field), so these caps are generous.
@@ -47,16 +47,24 @@ export class UI {
     document.getElementById('setup-start').addEventListener('click', () => {
       game.startBattle(this._setupComp, {
         environment: this._setupEnv,
-        formations: this._setupFormations,
+        placement: this._setupPlacement,
       });
       this.closeSetup();
     });
+    // Tabs: Location / Rome / The Horde.
+    document.querySelectorAll('#setup .setup-tab').forEach((tab) => {
+      tab.addEventListener('click', () => this._showTab(tab.dataset.tab));
+    });
+    // Location-tab quick actions.
+    document.getElementById('cfg-random').addEventListener('click', () => this._randomizeSetup());
+    document.getElementById('cfg-clear').addEventListener('click', () => this._clearSetup());
+    document.getElementById('cfg-default').addEventListener('click', () => this._defaultSetup());
     document.getElementById('restart').addEventListener('click', () => game.reset());
     document.getElementById('new-battle').addEventListener('click', () => { this.hideOutcome(); this.openSetup(); });
     document.getElementById('outcome-close').addEventListener('click', () => this.hideOutcome());
   }
 
-  // ---- Battle setup ------------------------------------------------------
+  // ---- Battle setup (tabbed: Location / Rome / Horde) --------------------
   openSetup() {
     // Start from a copy of the current composition and battlefield settings.
     this._setupComp = {
@@ -64,17 +72,38 @@ export class UI {
       barbarian: { ...this.game.composition.barbarian },
     };
     this._setupEnv = this.game.environment;
-    this._setupFormations = { ...this.game.formations };
-    this._renderSetup('rome-types', ROMAN_TYPES, 'roman');
-    this._renderSetup('horde-types', BARBARIAN_TYPES, 'barbarian');
-    this._renderEnvChoices();
-    this._renderFormationChoice('rome-formation', 'roman');
-    this._renderFormationChoice('horde-formation', 'barbarian');
-    this._refreshSetupTotals();
+    this._setupPlacement = {
+      roman: { ...this.game.placement.roman },
+      barbarian: { ...this.game.placement.barbarian },
+    };
+    this._renderAll();
+    this._wireMap('rome-map', 'roman');
+    this._wireMap('horde-map', 'barbarian');
+    this._showTab('location');
     this.setup.classList.add('show');
   }
 
-  // Battlefield picker: a row of environment tiles (settings / weather / time).
+  // Re-render every control from the current setup state.
+  _renderAll() {
+    this._renderEnvChoices();
+    this._renderSetup('rome-types', ROMAN_TYPES, 'roman');
+    this._renderSetup('horde-types', BARBARIAN_TYPES, 'barbarian');
+    this._renderFormationChoice('rome-formation', 'roman');
+    this._renderFormationChoice('horde-formation', 'barbarian');
+    this._drawMap('rome-map', 'roman');
+    this._drawMap('horde-map', 'barbarian');
+    this._refreshSetupTotals();
+  }
+
+  _showTab(name) {
+    document.querySelectorAll('#setup .setup-tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === name));
+    document.querySelectorAll('#setup .setup-panel').forEach((p) => p.classList.toggle('active', p.dataset.panel === name));
+    // Canvases only lay out correctly once visible — redraw on show.
+    if (name === 'rome') this._drawMap('rome-map', 'roman');
+    if (name === 'horde') this._drawMap('horde-map', 'barbarian');
+  }
+
+  // Battlefield picker: a grid of location/weather tiles.
   _renderEnvChoices() {
     const host = document.getElementById('env-choices');
     if (!host) return;
@@ -93,7 +122,7 @@ export class UI {
     }
   }
 
-  // Per-side formation selector.
+  // Per-side formation selector; changing it re-lays the deployment map.
   _renderFormationChoice(hostId, side) {
     const host = document.getElementById(hostId);
     if (!host) return;
@@ -104,15 +133,16 @@ export class UI {
       const opt = document.createElement('option');
       opt.value = key;
       opt.textContent = FORMATIONS[key].label;
-      if (key === this._setupFormations[side]) opt.selected = true;
+      if (key === this._setupPlacement[side].formation) opt.selected = true;
       sel.appendChild(opt);
     }
     const desc = document.createElement('span');
     desc.className = 'form-desc';
-    desc.textContent = FORMATIONS[this._setupFormations[side]].desc;
+    desc.textContent = FORMATIONS[this._setupPlacement[side].formation].desc;
     sel.addEventListener('change', () => {
-      this._setupFormations[side] = sel.value;
+      this._setupPlacement[side].formation = sel.value;
       desc.textContent = FORMATIONS[sel.value].desc;
+      this._drawMap(side === 'roman' ? 'rome-map' : 'horde-map', side);
     });
     host.appendChild(sel);
     host.appendChild(desc);
@@ -155,14 +185,149 @@ export class UI {
     comp[key] = next;
     countEl.textContent = next;
     this._refreshSetupTotals();
+    this._drawMap(side === 'roman' ? 'rome-map' : 'horde-map', side);
   }
 
   _refreshSetupTotals() {
     const r = armyCount(this._setupComp.roman);
     const h = armyCount(this._setupComp.barbarian);
-    document.getElementById('rome-total').textContent = r;
-    document.getElementById('horde-total').textContent = h;
+    const re = document.getElementById('rome-total');
+    const he = document.getElementById('horde-total');
+    if (re) re.textContent = r;
+    if (he) he.textContent = h;
     document.getElementById('setup-start').disabled = r === 0 || h === 0;
+  }
+
+  // ---- Deployment mini-map ----------------------------------------------
+  // Draw a top-down plan of the side's half of the field with a dot per unit
+  // at its formation slot; the anchor handle can be dragged to reposition.
+  _mapUnits(side) {
+    const comp = this._setupComp[side];
+    const order = composeArmy(comp).sort((a, b) =>
+      (UNIT_TYPES[a].role === 'ranged' ? 1 : 0) - (UNIT_TYPES[b].role === 'ranged' ? 1 : 0));
+    const p = this._setupPlacement[side];
+    const spacing = side === 'roman' ? 2.2 : 2.4;
+    const rowGap = order.length > 24 ? 1.75 : 1.9;
+    const slots = formationOffsets(p.formation, order.length, spacing, rowGap);
+    const dir = side === 'roman' ? 1 : -1;
+    return order.map((key, i) => {
+      const s = slots[i] || { x: 0, depth: 0 };
+      return { x: p.x + s.x, z: p.z + dir * s.depth, ranged: UNIT_TYPES[key].role === 'ranged' };
+    });
+  }
+
+  // World (x,z) → canvas pixels. Forward (toward the foe) is always UP.
+  _w2m(side, wx, wz, W, H) {
+    const cx = (wx + 28) / 56 * W;
+    const cy = side === 'roman' ? (wz + 28) / 56 * H : (28 - wz) / 56 * H;
+    return [cx, cy];
+  }
+
+  _drawMap(canvasId, side) {
+    const cv = document.getElementById(canvasId);
+    if (!cv) return;
+    const W = cv.width, H = cv.height;
+    const g = cv.getContext('2d');
+    g.clearRect(0, 0, W, H);
+    // Field
+    g.fillStyle = 'rgba(74,90,52,0.35)';
+    g.fillRect(0, 0, W, H);
+    // Enemy half tint (top)
+    g.fillStyle = 'rgba(150,50,50,0.10)';
+    g.fillRect(0, 0, W, H / 2);
+    // Own half tint (bottom)
+    g.fillStyle = side === 'roman' ? 'rgba(70,120,220,0.10)' : 'rgba(199,120,60,0.12)';
+    g.fillRect(0, H / 2, W, H / 2);
+    // Midline
+    g.strokeStyle = 'rgba(255,255,255,0.25)'; g.setLineDash([5, 5]);
+    g.beginPath(); g.moveTo(0, H / 2); g.lineTo(W, H / 2); g.stroke(); g.setLineDash([]);
+    g.fillStyle = 'rgba(255,255,255,0.4)'; g.font = '10px sans-serif'; g.textAlign = 'center';
+    g.fillText('▲ enemy', W / 2, 12);
+    // Enemy formation (faint reference)
+    const foe = side === 'roman' ? 'barbarian' : 'roman';
+    for (const u of this._mapUnits(foe)) {
+      const [x, y] = this._w2m(side, u.x, u.z, W, H);
+      g.fillStyle = 'rgba(200,90,90,0.35)';
+      g.beginPath(); g.arc(x, y, 2.4, 0, 7); g.fill();
+    }
+    // Own units
+    const col = side === 'roman' ? '#5aa0ff' : '#e0964a';
+    const rangedCol = side === 'roman' ? '#9ec8ff' : '#f0c48a';
+    for (const u of this._mapUnits(side)) {
+      const [x, y] = this._w2m(side, u.x, u.z, W, H);
+      g.fillStyle = u.ranged ? rangedCol : col;
+      g.beginPath(); g.arc(x, y, 3.2, 0, 7); g.fill();
+    }
+    // Anchor handle
+    const p = this._setupPlacement[side];
+    const [ax, ay] = this._w2m(side, p.x, p.z, W, H);
+    g.strokeStyle = '#ffd24f'; g.lineWidth = 2;
+    g.beginPath(); g.arc(ax, ay, 7, 0, 7); g.stroke();
+    g.fillStyle = 'rgba(255,210,79,0.35)'; g.fill();
+    g.lineWidth = 1;
+  }
+
+  _wireMap(canvasId, side) {
+    const cv = document.getElementById(canvasId);
+    if (!cv || cv._wired) return;
+    cv._wired = true;
+    const B = PLACEMENT_BOUNDS[side];
+    const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+    const setFromEvent = (e) => {
+      const rect = cv.getBoundingClientRect();
+      const px = (e.clientX - rect.left) / rect.width * cv.width;
+      const py = (e.clientY - rect.top) / rect.height * cv.height;
+      const wx = px / cv.width * 56 - 28;
+      const wz = side === 'roman' ? py / cv.height * 56 - 28 : 28 - py / cv.height * 56;
+      const p = this._setupPlacement[side];
+      p.x = clamp(Math.round(wx), B.xMin, B.xMax);
+      p.z = clamp(Math.round(wz), B.zMin, B.zMax);
+      this._drawMap(canvasId, side);
+    };
+    let dragging = false;
+    cv.addEventListener('pointerdown', (e) => { dragging = true; cv.setPointerCapture(e.pointerId); setFromEvent(e); });
+    cv.addEventListener('pointermove', (e) => { if (dragging) setFromEvent(e); });
+    cv.addEventListener('pointerup', () => { dragging = false; });
+    cv.addEventListener('pointercancel', () => { dragging = false; });
+  }
+
+  // ---- Location-tab quick actions ---------------------------------------
+  _randomizeSetup() {
+    const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+    this._setupEnv = pick(ENV_KEYS);
+    for (const [side, types] of [['roman', ROMAN_TYPES], ['barbarian', BARBARIAN_TYPES]]) {
+      const comp = {};
+      let budget = 6 + Math.floor(Math.random() * (MAX_PER_SIDE - 6));
+      const shuffled = types.slice().sort(() => Math.random() - 0.5);
+      for (const key of shuffled) {
+        if (budget <= 0) break;
+        const n = Math.min(budget, Math.floor(Math.random() * (MAX_PER_TYPE + 1)));
+        if (n > 0) { comp[key] = n; budget -= n; }
+      }
+      if (armyCount(comp) === 0) comp[types[0]] = 3;      // never empty
+      this._setupComp[side] = comp;
+      const B = PLACEMENT_BOUNDS[side];
+      this._setupPlacement[side] = {
+        formation: pick(FORMATION_KEYS),
+        x: Math.round(B.xMin + Math.random() * (B.xMax - B.xMin)),
+        z: Math.round(B.zMin + Math.random() * (B.zMax - B.zMin)),
+      };
+    }
+    this._renderAll();
+  }
+
+  _clearSetup() {
+    this._setupComp = { roman: {}, barbarian: {} };
+    this._setupEnv = DEFAULT_ENV;
+    this._setupPlacement = defaultPlacement();
+    this._renderAll();
+  }
+
+  _defaultSetup() {
+    this._setupComp = { roman: { ...DEFAULT_ARMY.roman }, barbarian: { ...DEFAULT_ARMY.barbarian } };
+    this._setupEnv = DEFAULT_ENV;
+    this._setupPlacement = defaultPlacement();
+    this._renderAll();
   }
 
   updateTally(game) {

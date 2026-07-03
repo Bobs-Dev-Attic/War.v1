@@ -72,24 +72,55 @@
       <div id="setup">
         <div class="setup-card">
           <button class="setup-close" id="setup-cancel" title="Close">×</button>
-          <h2>Muster the Armies</h2>
-          <p class="setup-hint">Choose the battlefield, each side's make-up and formation, then take the field.</p>
-          <div class="setup-section">
-            <h4 class="setup-label">Battlefield</h4>
+          <h2>Prepare for Battle</h2>
+          <div class="setup-tabs">
+            <button class="setup-tab active" data-tab="location">📍 Location</button>
+            <button class="setup-tab" data-tab="rome">🦅 Rome</button>
+            <button class="setup-tab" data-tab="horde">🪓 The Horde</button>
+          </div>
+
+          <!-- Tab 1: Location & weather -->
+          <div class="setup-panel active" data-panel="location">
+            <h4 class="setup-label">Location &amp; Weather Conditions</h4>
             <div class="env-choices" id="env-choices"></div>
-          </div>
-          <div class="setup-cols">
-            <div class="setup-col rome">
-              <h3>🦅 Rome <span class="col-total" id="rome-total">0</span></h3>
-              <div class="type-list" id="rome-types"></div>
-              <div class="formation-pick"><span class="formation-lbl">Formation</span><span id="rome-formation"></span></div>
+            <div class="setup-quick">
+              <button class="quick-btn" id="cfg-random">🎲 Random</button>
+              <button class="quick-btn" id="cfg-clear">✕ Clear all</button>
+              <button class="quick-btn" id="cfg-default">↺ Defaults</button>
             </div>
-            <div class="setup-col horde">
-              <h3>🪓 The Horde <span class="col-total" id="horde-total">0</span></h3>
-              <div class="type-list" id="horde-types"></div>
-              <div class="formation-pick"><span class="formation-lbl">Formation</span><span id="horde-formation"></span></div>
+            <p class="setup-hint">Pick where and when you fight, then set each army in the Rome and Horde tabs.</p>
+          </div>
+
+          <!-- Tab 2: Rome -->
+          <div class="setup-panel" data-panel="rome">
+            <div class="army-editor">
+              <div class="army-types">
+                <div class="army-head">🦅 Legion <span class="col-total" id="rome-total">0</span></div>
+                <div class="type-list" id="rome-types"></div>
+                <div class="formation-pick"><span class="formation-lbl">Formation</span><span id="rome-formation"></span></div>
+              </div>
+              <div class="army-map">
+                <span class="map-lbl">Deployment — drag to position</span>
+                <canvas id="rome-map" width="240" height="240"></canvas>
+              </div>
             </div>
           </div>
+
+          <!-- Tab 3: The Horde -->
+          <div class="setup-panel" data-panel="horde">
+            <div class="army-editor">
+              <div class="army-types">
+                <div class="army-head">🪓 Horde <span class="col-total" id="horde-total">0</span></div>
+                <div class="type-list" id="horde-types"></div>
+                <div class="formation-pick"><span class="formation-lbl">Formation</span><span id="horde-formation"></span></div>
+              </div>
+              <div class="army-map">
+                <span class="map-lbl">Deployment — drag to position</span>
+                <canvas id="horde-map" width="240" height="240"></canvas>
+              </div>
+            </div>
+          </div>
+
           <div class="setup-actions">
             <button id="setup-start">Begin Battle</button>
           </div>

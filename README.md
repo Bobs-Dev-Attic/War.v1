@@ -12,10 +12,18 @@ dodges — while holding real weapons and shields.
 ## Gameplay
 
 You control the **Roman soldiers**; the **barbarian horde** charges automatically.
-Use the **top menu → New Battle** to choose a **battlefield**, muster custom armies
-(pick how many of each unit type per side) and set each side's **formation**, or
+Use the **top menu → New Battle** to open the **tabbed battle planner**, or
 **Rematch** to refight the same armies. When a battle ends you can **close the
 banner and watch the victors celebrate**, or start a new one.
+
+The **New Battle** planner has three tabs:
+
+1. **📍 Location** — pick the battlefield (location, weather & time of day), with
+   **🎲 Random** (roll a whole battle), **✕ Clear all**, and **↺ Defaults** shortcuts.
+2. **🦅 Rome** — choose how many of each Roman unit type, their **formation**, and
+   **where to deploy** them: drag the anchor on the mini-map to position your line
+   anywhere on your half of the field (the preview shows every soldier's spot).
+3. **🪓 The Horde** — the same, for the barbarian army.
 
 ### Battlefields
 
