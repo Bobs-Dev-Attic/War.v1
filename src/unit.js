@@ -57,6 +57,8 @@ export class Unit {
     const cfg = { ...base, ...type.cfg };
     this.weaponKind = cfg.weapon;
     this.polearm = cfg.weapon === 'spear' || cfg.weapon === 'pike';
+    this.twoHanded = cfg.weapon === 'greataxe' || cfg.weapon === 'maul';
+    this.isBow = cfg.weapon === 'bow';
     this.shoveCooldown = Math.random() * 1.5;
     const built = buildHumanoid(cfg);
     this.root = built.root;
@@ -542,6 +544,8 @@ export class Unit {
     if (m.type === 'ranged' && target && target.alive) this._faceTarget(target, dt);
     this._rest();
     m.pose(this.j, p, this);
+    // Keep the off hand on the haft as a two-handed weapon is swung.
+    if (this.twoHanded && m.type !== 'ranged') this._applyTwoHandGrip();
     this._applyFacing();                       // picks up spinOffset if the pose set it
     if (m.type === 'attack' && !mv.hitDone && p >= m.hit[0]) {
       mv.hitDone = true;
@@ -772,15 +776,7 @@ export class Unit {
     this.j.rightHip.rotation.x = -0.14;
     this.j.leftKnee.rotation.x = -0.22;
     this.j.rightKnee.rotation.x = -0.22;
-    if (this.polearm) {
-      // Level the shaft at the foe rather than raising a blade — braced to jab.
-      this.j.rightShoulder.rotation.set(1.35, 0, 0.0);
-      this.j.rightElbow.rotation.x = 0.12;
-    } else {
-      this.j.rightShoulder.rotation.set(0.3, 0, 0);   // blade up at the ready
-      this.j.rightElbow.rotation.x = 1.5;
-    }
-    this._applyHold();                                 // shield in guard
+    this._readyArms();                                 // weapon (and off hand) at the ready
     if (this.defensive) {
       // Brace hard behind the shield: raised, crouched, weapon tucked.
       this.j.leftShoulder.rotation.set(0.7, 0, 0.34);
@@ -847,21 +843,45 @@ export class Unit {
     j.rightHip.rotation.set(0, 0, 0);
     j.leftKnee.rotation.set(0, 0, 0);
     j.rightKnee.rotation.set(0, 0, 0);
-    // Shield arm held in guard.
+    // Shield/off arm held in guard, then the weapon arm at the ready.
     this._applyHold();
+    this._readyArms();
+  }
+
+  // Pose the weapon arm (and, for two-handed weapons and bows, the off arm) into
+  // a natural ready stance for the weapon this soldier carries.
+  _readyArms() {
+    const j = this.j;
     if (this.polearm) {
       // Hold the shaft level, arm out, so the point aims straight at the foe.
       j.rightShoulder.rotation.set(1.4, 0, 0.0);
       j.rightElbow.rotation.set(0.1, 0, 0);
-    } else if (this.ranged && this.weaponKind === 'bow') {
-      // Archer's draw hand rests near the string.
+    } else if (this.isBow) {
+      // Draw hand rests near the string; the bow arm holds the bow up in front.
       j.rightShoulder.rotation.set(0.2, 0, 0);
       j.rightElbow.rotation.set(0.6, 0, 0);
+      j.leftShoulder.rotation.set(0.75, 0, 0.12);
+      j.leftElbow.rotation.set(0.35, 0, 0);
+    } else if (this.twoHanded) {
+      // Both hands on the haft, the great weapon raised at the ready.
+      j.rightShoulder.rotation.set(1.2, 0, 0.15);
+      j.rightElbow.rotation.set(1.7, 0, 0);
+      this._applyTwoHandGrip();
     } else {
       // Weapon held READY forward (blade up at the ready), never at the ground.
       j.rightShoulder.rotation.set(0.3, 0, 0);
       j.rightElbow.rotation.set(1.5, 0, 0);
     }
+  }
+
+  // The off hand tracks the weapon hand so a two-handed weapon looks gripped by
+  // both hands as it is held and swung.
+  _applyTwoHandGrip() {
+    const j = this.j;
+    const rsx = j.rightShoulder.rotation.x;
+    const rel = j.rightElbow.rotation.x;
+    j.leftShoulder.rotation.set(rsx * 0.95 + 0.12, 0, -0.35);
+    j.leftElbow.rotation.set(Math.max(0.9, rel * 0.9 + 0.25), 0, 0);
   }
 
   _applyHold() {
@@ -879,8 +899,9 @@ export class Unit {
     this._rest();                              // keeps weapon up & shield ready
     this.j.body.position.y = Math.sin(this.animT * 1.6) * 0.02;
     this.j.chest.rotation.x = -0.04 + Math.sin(this.animT * 1.6) * 0.02;
-    // Gentle breathing sway on the ready weapon arm.
-    if (!this.polearm && !(this.ranged && this.weaponKind === 'bow')) {
+    // Gentle breathing sway on the one-handed ready arm only (leave the polearm,
+    // bow and two-handed holds as posed by _readyArms).
+    if (!this.polearm && !this.isBow && !this.twoHanded) {
       this.j.rightShoulder.rotation.x = 0.3 + Math.sin(this.animT * 1.6 + 1) * 0.04;
     }
     this._recover(dt);                         // idle: catch your breath fully
