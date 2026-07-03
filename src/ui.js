@@ -265,18 +265,15 @@ export class UI {
         this._drawMap(this._sideIds(side).map, side);
       });
       row.appendChild(sel);
-      // Rotation: turn the block in 15° steps.
-      const rot = document.createElement('select');
-      rot.className = 'grp-rot'; rot.title = 'Rotate formation';
-      for (let a = 0; a < 360; a += 15) {
-        const opt = document.createElement('option');
-        opt.value = a; opt.textContent = a + '°';
-        if (a === (grp.rot || 0)) opt.selected = true;
-        rot.appendChild(opt);
-      }
+      // Rotation: a button that cycles the block's facing in 45° steps.
+      const rot = document.createElement('button');
+      rot.className = 'grp-rot'; rot.title = 'Rotate formation 45°';
+      rot.textContent = '⟳ ' + (grp.rot || 0) + '°';
       rot.addEventListener('pointerdown', (e) => e.stopPropagation());
-      rot.addEventListener('change', () => {
-        grp.rot = +rot.value;
+      rot.addEventListener('click', (e) => {
+        e.stopPropagation();
+        grp.rot = ((grp.rot || 0) + 45) % 360;
+        rot.textContent = '⟳ ' + grp.rot + '°';
         this._drawMap(this._sideIds(side).map, side);
       });
       row.appendChild(rot);
@@ -327,6 +324,17 @@ export class UI {
     g.beginPath(); g.moveTo(0, H / 2); g.lineTo(W, H / 2); g.stroke(); g.setLineDash([]);
     g.fillStyle = 'rgba(255,255,255,0.4)'; g.font = '10px sans-serif'; g.textAlign = 'center';
     g.fillText('▲ enemy', W / 2, 12);
+    // Forward-direction marker: soldiers always advance UP the map, toward the
+    // foe. A gold arrow up the left margin makes "forward" clear once formations
+    // are rotated.
+    const fx = 14;
+    g.strokeStyle = 'rgba(255,210,79,0.8)'; g.fillStyle = 'rgba(255,210,79,0.8)'; g.lineWidth = 2;
+    g.beginPath(); g.moveTo(fx, H * 0.72); g.lineTo(fx, H * 0.32); g.stroke();
+    g.beginPath(); g.moveTo(fx, H * 0.26); g.lineTo(fx - 5, H * 0.36); g.lineTo(fx + 5, H * 0.36); g.closePath(); g.fill();
+    g.lineWidth = 1;
+    g.save(); g.translate(fx + 11, H * 0.52); g.rotate(-Math.PI / 2);
+    g.fillStyle = 'rgba(255,235,190,0.7)'; g.font = 'bold 9px sans-serif'; g.textAlign = 'center';
+    g.fillText('FORWARD', 0, 0); g.restore();
     // Enemy groups (faint reference)
     const foe = side === 'roman' ? 'barbarian' : 'roman';
     for (const grp of this._setupGroups[foe]) {
@@ -414,7 +422,7 @@ export class UI {
         budget -= count;
         groups.push({
           id: ++this._gid, typeKey: pick(types), count, formation: pick(FORMATION_KEYS),
-          rot: Math.floor(Math.random() * 24) * 15,
+          rot: Math.floor(Math.random() * 8) * 45,
           x: clamp(Math.round(B.xMin + Math.random() * (B.xMax - B.xMin)), B.xMin, B.xMax),
           z: clamp(Math.round(B.zMin + Math.random() * (B.zMax - B.zMin)), B.zMin, B.zMax),
         });
