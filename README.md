@@ -86,7 +86,14 @@ Hunter (bow), Chieftain (towering elite champion), **Outrider (mounted axe
 raider — fast, hard-hitting horse cavalry)**.
 
 **Cavalry** ride articulated horses that gallop into battle; they move far faster
-than infantry and carry a bigger reach, at a higher point cost.
+than infantry and carry a bigger reach, at a higher point cost. A warhorse is its
+own creature: it has its own health and a heavy footprint that **tramples** lighter
+infantry aside, it **rears** to strike foes ahead and **kicks** out at those behind
+(staggering, high-damage hoof blows), and it **bounds over** obstacles mid-gallop.
+Horses **can be killed** — most of a blow aimed at a rider lands on the mount — and
+their **legs or head can be hacked off**, which cripples the horse and **throws the
+rider**, who then fights on foot: still able to attack, defend and take orders, just
+without the speed and reach of the saddle.
 
 Archers and javelineers fire **projectiles**, keep their distance and fall back
 when a foe closes; pikes and spears out-reach swords; shields catch arrows.

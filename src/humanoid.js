@@ -53,16 +53,17 @@ function buildHorse(c) {
   g.add(body);
   const rump = box(0.5, 0.5, 0.4, hide, 0.92); rump.position.set(0, 1.05, 0.72); g.add(rump);
   const chest = box(0.48, 0.5, 0.35, hide, 0.92); chest.position.set(0, 1.0, -0.6); g.add(chest);
-  const neck = box(0.32, 0.6, 0.34, hide, 0.92);
-  neck.position.set(0, 1.36, -0.82); neck.rotation.x = 0.62; g.add(neck);
-  const head = box(0.22, 0.24, 0.52, hide, 0.9);
-  head.position.set(0, 1.62, -1.08); head.rotation.x = 0.28; g.add(head);
-  const muzzle = box(0.16, 0.16, 0.2, 0x4a3320, 0.9); muzzle.position.set(0, 1.5, -1.32); g.add(muzzle);
+  // Head + neck as one group so it can be lopped off in one piece.
+  const headG = new THREE.Group();
+  headG.position.set(0, 1.05, -0.55);
+  g.add(headG);
+  const neck = box(0.32, 0.6, 0.34, hide, 0.92); neck.position.set(0, 0.31, -0.27); neck.rotation.x = 0.62; headG.add(neck);
+  const head = box(0.22, 0.24, 0.52, hide, 0.9); head.position.set(0, 0.57, -0.53); head.rotation.x = 0.28; headG.add(head);
+  const muzzle = box(0.16, 0.16, 0.2, 0x4a3320, 0.9); muzzle.position.set(0, 0.45, -0.77); headG.add(muzzle);
   for (const ex of [-0.08, 0.08]) {
-    const ear = box(0.06, 0.12, 0.05, hide, 0.9); ear.position.set(ex, 1.76, -0.96); ear.rotation.x = -0.2; g.add(ear);
+    const ear = box(0.06, 0.12, 0.05, hide, 0.9); ear.position.set(ex, 0.71, -0.41); ear.rotation.x = -0.2; headG.add(ear);
   }
-  // Mane down the neck and a swishing tail.
-  const mane = box(0.06, 0.62, 0.36, dark, 0.95); mane.position.set(0, 1.4, -0.78); mane.rotation.x = 0.62; g.add(mane);
+  const mane = box(0.06, 0.62, 0.36, dark, 0.95); mane.position.set(0, 0.35, -0.23); mane.rotation.x = 0.62; headG.add(mane);
   const tail = cyl(0.06, 0.02, 0.62, dark, 6, 0.95); tail.position.set(0, 1.0, 0.95); tail.rotation.x = -0.5; g.add(tail);
   // Saddle + blanket the rider sits on.
   const blanket = box(0.56, 0.08, 0.7, c.saddleCloth || 0x8a2a2a, 0.85); blanket.position.set(0, 1.3, 0.12); g.add(blanket);
@@ -80,7 +81,7 @@ function buildHorse(c) {
     const hoof = box(0.11, 0.1, 0.15, dark, 0.9); hoof.position.set(0, -0.48, 0.01); knee.add(hoof);
     legs[key] = { hip, knee };
   }
-  return { group: g, legs };
+  return { group: g, legs, head: headG, body };
 }
 
 export function buildHumanoid(cfg) {
@@ -267,11 +268,11 @@ export function buildHumanoid(cfg) {
   arms.right.elbow.rotation.x = 0.25;
 
   // ---- Mount: seat the rider on a horse ----
-  let horse = null, horseLegs = null;
+  let horse = null, horseLegs = null, horseHead = null, horseBody = null;
   if (c.mounted) {
     const h = buildHorse(c);
     root.add(h.group);
-    horse = h.group; horseLegs = h.legs;
+    horse = h.group; horseLegs = h.legs; horseHead = h.head; horseBody = h.body;
     // Lift the rider onto the saddle and splay the legs down the horse's sides.
     body.position.y = 0.5;
     legs.left.hip.rotation.set(0.35, 0, 0.55); legs.left.knee.rotation.x = -1.25;
@@ -281,7 +282,7 @@ export function buildHumanoid(cfg) {
   root.traverse((o) => { if (o.isMesh) o.matrixAutoUpdate = true; });
 
   return {
-    root, horse, horseLegs,
+    root, horse, horseLegs, horseHead, horseBody,
     joints: {
       body, chest, head,
       leftHip: legs.left.hip, leftKnee: legs.left.knee,

@@ -66,6 +66,24 @@ export class Unit {
     this.j = built.joints;
     this.horse = built.horse;
     this.horseLegs = built.horseLegs;
+    this.horseHead = built.horseHead;
+    this.horseBody = built.horseBody;
+    // Mounted state: the horse is its own creature — it has its own health, its
+    // legs/head can be hacked off, and it can rear, kick and jump.
+    if (this.mounted) {
+      this.horseMaxHp = Math.round(this.maxHp * 1.2);
+      this.horseHp = this.horseMaxHp;
+      this.horseAlive = true;
+      this.horseParts = { head: true, fl: true, fr: true, bl: true, br: true };
+      this.horseImmobile = false;
+      this.mountSpeedMul = (type.stat && type.stat.speed) ? type.stat.speed : 1;
+      this.horseMove = null;              // { kind:'rear'|'kick', t, hitDone }
+      this.horseAttackCd = Math.random() * 2;
+      this.pranceCd = 1 + Math.random() * 3;
+      this.jumpT = -1;                    // -1 = grounded; ≥0 = in the air
+      this.jumpY = 0;
+      this.jumpCd = Math.random() * 3;
+    }
     this.root.position.copy(position);
     // Subtle per-soldier build: the burly stand a touch taller and broader;
     // elite champions (Praetorian, Chieftain) stand out a little more.
@@ -165,6 +183,16 @@ export class Unit {
   // ---- Combat ------------------------------------------------------------
   applyDamage(amount, fromDir, stagger = false, game) {
     if (!this.alive || this.hasSurrendered) return;
+    // A blow at a mounted fighter mostly strikes the big target — the horse —
+    // and only partly reaches the rider up in the saddle.
+    if (this.mounted && this.horseAlive) {
+      this.horseHp -= amount * 0.6;
+      if (this.horseHp <= 0) {
+        this.horseHp = 0;
+        this._horseDown(fromDir, game);
+      }
+      amount *= 0.4;
+    }
     this.hp -= amount;
     if (this.hp <= 0) {
       this.hp = 0;
@@ -250,14 +278,101 @@ export class Unit {
   // On a strong or killing blow, chance to lop off a limb.
   _severRandom(killing, attacker, game) {
     const dir = Math.sign(this.position.x - attacker.position.x) || 1;
+    // A mounted fighter presents the horse as the bigger target: blows are as
+    // likely to hack the horse's legs or head as the rider's own limbs.
+    if (this.mounted && this.horseAlive) {
+      const hopts = [];
+      for (const leg of ['fl', 'fr', 'bl', 'br']) if (this.horseParts[leg]) hopts.push(leg);
+      if (this.horseParts.head) hopts.push('head');
+      if (hopts.length && Math.random() < 0.6) {
+        this._severHorse(hopts[Math.floor(Math.random() * hopts.length)], game, dir);
+        return;
+      }
+    }
     const opts = [];
     if (this.parts.rightArm) opts.push('rightArm');
     if (this.parts.leftArm) opts.push('leftArm');
-    if (this.parts.leftLeg) opts.push('leftLeg');
-    if (this.parts.rightLeg) opts.push('rightLeg');
+    // Don't lop off a mounted rider's legs — they're wrapped round the horse.
+    if (!this.mounted && this.parts.leftLeg) opts.push('leftLeg');
+    if (!this.mounted && this.parts.rightLeg) opts.push('rightLeg');
     if (killing && this.parts.head) opts.push('head', 'head');   // decapitations on kills
     if (!opts.length) return;
     this.sever(opts[Math.floor(Math.random() * opts.length)], game, dir);
+  }
+
+  // Hack a piece off the horse: a leg cripples it (immobile), the head kills it.
+  _severHorse(part, game, dir = 1) {
+    if (!this.mounted || !this.horseAlive || !this.horseParts[part]) return;
+    this.horseParts[part] = false;
+    if (part === 'head') {
+      const headG = this.horseHead;
+      if (headG && headG.parent) {
+        const wound = new THREE.Vector3();
+        headG.getWorldPosition(wound);
+        const vel = new THREE.Vector3(dir * (1 + Math.random() * 2), 2.5 + Math.random() * 2, (Math.random() - 0.5) * 2);
+        game.addGib(headG, vel, new THREE.Vector3((Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8));
+        this.horseHead = new THREE.Object3D();
+        game.spawnBlood(wound, { x: dir, z: 0 }, 30, 1.9);
+      }
+      this._horseDown(dir, game);
+      return;
+    }
+    // A leg: fling it off, leave a bloody stump, and the horse can no longer stand.
+    const leg = this.horseLegs && this.horseLegs[part];
+    if (leg && leg.hip && leg.hip.parent) {
+      const wound = new THREE.Vector3();
+      leg.hip.getWorldPosition(wound);
+      const vel = new THREE.Vector3(dir * (0.5 + Math.random() * 1.5), 1.5 + Math.random() * 1.5, (Math.random() - 0.5) * 2);
+      game.addGib(leg.hip, vel, new THREE.Vector3((Math.random() - 0.5) * 7, (Math.random() - 0.5) * 7, (Math.random() - 0.5) * 7));
+      this.horseLegs[part] = { hip: new THREE.Object3D(), knee: new THREE.Object3D() };
+      game.spawnBlood(wound, { x: dir, z: 0 }, 22, 1.6);
+    }
+    // A crippled horse can't carry the fight — it collapses and throws its rider.
+    this.horseImmobile = true;
+    this._horseDown(dir, game);
+  }
+
+  // The horse dies: it drops, tilts onto its side, and pitches the rider off.
+  _horseDown(fromDir, game) {
+    if (!this.mounted || !this.horseAlive) return;
+    this.horseAlive = false;
+    this.horseImmobile = true;
+    this.horseMove = null;
+    if (this.healthBar) this.healthBar.position.y = 2.15;
+    this._dismount(game, fromDir);
+  }
+
+  // The rider comes off the horse — falls to the ground but fights on foot:
+  // they can still attack, defend and take orders.
+  _dismount(game, fromDir = 1) {
+    if (!this.mounted) return;
+    this.mounted = false;
+    const dir = Math.sign(fromDir) || (Math.random() < 0.5 ? 1 : -1);
+    // Leave the (dead/crippled) horse behind as a carcass, tipped on its side.
+    if (this.horse) {
+      const hp = new THREE.Vector3();
+      this.horse.getWorldPosition(hp);
+      game.group.attach(this.horse);
+      this.horse.position.copy(hp);
+      this.horse.rotation.z = dir * (Math.PI / 2 - 0.15);
+      this.horse.position.y = this.world ? this.world.heightAt(hp.x, hp.z) : 0;
+    }
+    // Put the rider back on their own two feet.
+    this.j.body.position.y = 0;
+    this.j.leftHip.rotation.set(0, 0, 0); this.j.leftKnee.rotation.x = 0;
+    this.j.rightHip.rotation.set(0, 0, 0); this.j.rightKnee.rotation.x = 0;
+    // Shrink the footprint back to a single soldier and reset the HUD anchors.
+    const scale = this.root.scale.x;
+    this.radius = 0.5 * scale;
+    if (this.healthBar) this.healthBar.position.y = 2.15;
+    if (this.selectionRing) this.selectionRing.geometry = new THREE.RingGeometry(0.55, 0.72, 32);
+    // Lose the horse's speed bonus — back to a foot-soldier's pace.
+    if (this.mountSpeedMul && this.mountSpeedMul !== 0) {
+      this.baseSpeed /= this.mountSpeedMul;
+      this.speed = this.baseSpeed;
+    }
+    // Stumble on landing.
+    if (this.alive && !this.hasSurrendered) this._startMove('flinch');
   }
 
   _fallAndCrawl() {
@@ -323,8 +438,12 @@ export class Unit {
     if (this.attackCooldown > 0) this.attackCooldown -= dt;
     if (this.rangedCooldown > 0) this.rangedCooldown -= dt;
     if (this.shoveCooldown > 0) this.shoveCooldown -= dt;
+    if (this.mounted && this.horseAlive && this.horseAttackCd > 0) this.horseAttackCd -= dt;
     // Shield-bearers told to Stand Ground brace defensively.
     this.defensive = this.order === 'hold' && this.hasShield && !this.disarmed;
+
+    // The horse is mid-rear or mid-kick — play it out before anything else.
+    if (this.horseMove) { this._advanceHorseMove(dt, game); this._finishFrame(game); return; }
 
     // A disarmed soldier (weapon arm gone) can't fight — they break and flee.
     if (this.disarmed) {
@@ -410,6 +529,12 @@ export class Unit {
         this._stepToward(target.position, dt, dist > this.range + 1.6 ? 'run' : 'walk');
       }
     } else if (this.attackCooldown <= 0) {
+      // A horse rears to strike foes in front or lashes out with a hind kick —
+      // a heavy, staggering blow instead of the rider's own swing.
+      if (this.mounted && this.horseAlive && this.horseAttackCd <= 0 && Math.random() < 0.4) {
+        this._startHorseMove(Math.random() < 0.7 ? 'rear' : 'kick', target);
+        return;
+      }
       // Shield-bearers holding the line shove pressing foes back to make space;
       // aggressors do it now and then to stagger a swing.
       if (this.hasShield && this.shoveCooldown <= 0 && dist <= this.range + 0.15 &&
@@ -758,7 +883,19 @@ export class Unit {
     this.gait = gait;
     const freq = this.mounted ? 14 : (gait === 'run' ? 11 : 7);
     this.stride += dt * freq;
-    if (this.mounted) this._animateGallop();
+    if (this.mounted) {
+      // A galloping horse now and then bounds over an obstacle.
+      if (this.jumpCd > 0) this.jumpCd -= dt;
+      if (this.jumpT < 0 && this.jumpCd <= 0 && gait === 'run' && Math.random() < 0.012) {
+        this.jumpT = 0; this.jumpCd = 4 + Math.random() * 4;
+      }
+      if (this.jumpT >= 0) {
+        this.jumpT += dt * 1.3;
+        this.jumpY = Math.sin(Math.min(1, this.jumpT) * Math.PI) * 1.35;
+        if (this.jumpT >= 1) { this.jumpT = -1; this.jumpY = 0; }
+      } else this.jumpY = 0;
+      this._animateGallop();
+    }
     else if (gait === 'run') this._animateRun();
     else this._animateWalk();
   }
@@ -839,6 +976,8 @@ export class Unit {
     }
     // Stand on the terrain surface rather than a flat plane.
     this.position.y = this.world ? this.world.heightAt(this.position.x, this.position.z) : 0;
+    // A jumping horse arcs off the ground.
+    if (this.mounted && this.jumpY) this.position.y += this.jumpY;
   }
 
   // ---- Animations --------------------------------------------------------
@@ -867,22 +1006,126 @@ export class Unit {
   }
 
   _standHorse() {
+    if (this.horse) this.horse.rotation.set(0, 0, 0);
     const L = this.horseLegs; if (!L) return;
-    for (const k of ['fl', 'fr', 'bl', 'br']) { L[k].hip.rotation.x = 0; L[k].knee.rotation.x = -0.05; }
+    for (const k of ['fl', 'fr', 'bl', 'br']) {
+      if (this.horseParts && !this.horseParts[k]) continue;
+      L[k].hip.rotation.x = 0; L[k].knee.rotation.x = -0.05;
+    }
   }
 
   _animateGallop() {
     const t = this.stride, L = this.horseLegs;
+    const has = (k) => !this.horseParts || this.horseParts[k];
     if (L) {
-      const swing = (ph) => Math.sin(t + ph);
-      const tuck = (ph) => -0.35 + Math.max(0, Math.sin(t + ph)) * 0.7;
-      // Diagonal pairs lead the gait.
-      L.fl.hip.rotation.x = swing(0) * 0.6;         L.fl.knee.rotation.x = tuck(0);
-      L.br.hip.rotation.x = swing(0.4) * 0.55;      L.br.knee.rotation.x = tuck(0.4);
-      L.fr.hip.rotation.x = swing(Math.PI) * 0.6;   L.fr.knee.rotation.x = tuck(Math.PI);
-      L.bl.hip.rotation.x = swing(Math.PI + 0.4) * 0.55; L.bl.knee.rotation.x = tuck(Math.PI + 0.4);
+      if (this.jumpY > 0.1) {
+        // Airborne over a jump — all four legs tuck up under the belly.
+        for (const k of ['fl', 'fr', 'bl', 'br']) if (has(k)) { L[k].hip.rotation.x = 0.5; L[k].knee.rotation.x = -1.1; }
+      } else {
+        const swing = (ph) => Math.sin(t + ph);
+        const tuck = (ph) => -0.35 + Math.max(0, Math.sin(t + ph)) * 0.7;
+        // Diagonal pairs lead the gait.
+        if (has('fl')) { L.fl.hip.rotation.x = swing(0) * 0.6;         L.fl.knee.rotation.x = tuck(0); }
+        if (has('br')) { L.br.hip.rotation.x = swing(0.4) * 0.55;      L.br.knee.rotation.x = tuck(0.4); }
+        if (has('fr')) { L.fr.hip.rotation.x = swing(Math.PI) * 0.6;   L.fr.knee.rotation.x = tuck(Math.PI); }
+        if (has('bl')) { L.bl.hip.rotation.x = swing(Math.PI + 0.4) * 0.55; L.bl.knee.rotation.x = tuck(Math.PI + 0.4); }
+      }
     }
     this._seatRider(Math.abs(Math.sin(t)) * 0.05);   // rider bobs with the gait
+  }
+
+  // ---- Mounted: rear, kick, prance and jump ------------------------------
+  _startHorseMove(kind, target) {
+    this.horseMove = { kind, t: 0, hitDone: false };
+    this._comboTarget = target;
+    this.state = kind;
+    this.horseAttackCd = 2.5 + Math.random() * 2.5;
+  }
+
+  _advanceHorseMove(dt, game) {
+    const hm = this.horseMove;
+    hm.t += dt;
+    const dur = 0.9;
+    const p = Math.min(1, hm.t / dur);
+    const target = this._comboTarget;
+    if (target && target.alive && !target.hasSurrendered) this._faceTarget(target, dt);
+    this._rest();
+    if (hm.kind === 'rear') this._animateHorseRear(p);
+    else this._animateHorseKick(p);
+    this._applyFacing();
+    if (!hm.hitDone && p >= 0.5) { hm.hitDone = true; this._horseStrike(hm.kind, game); }
+    if (hm.t >= dur) { this.horseMove = null; this.state = 'idle'; this.attackCooldown = 0.3 + Math.random() * 0.3; }
+  }
+
+  _animateHorseRear(p) {
+    const a = Math.sin(p * Math.PI);
+    if (this.horse) this.horse.rotation.x = a * 0.8;       // pitch up onto the hind legs
+    const L = this.horseLegs, has = (k) => this.horseParts[k];
+    if (L) {
+      if (has('fl')) { L.fl.hip.rotation.x = -1.2 * a; L.fl.knee.rotation.x = -1.0 * a - 0.05; }
+      if (has('fr')) { L.fr.hip.rotation.x = -1.2 * a; L.fr.knee.rotation.x = -1.0 * a - 0.05; }
+      if (has('bl')) { L.bl.hip.rotation.x = 0.15 * a; }
+      if (has('br')) { L.br.hip.rotation.x = 0.15 * a; }
+    }
+    this._seatRider(0);
+    this.j.chest.rotation.x = 0.22 * a;                    // rider rocks back with the rear
+  }
+
+  _animateHorseKick(p) {
+    const a = Math.sin(p * Math.PI);
+    if (this.horse) this.horse.rotation.x = -0.4 * a;      // pitch forward onto the fore legs
+    const L = this.horseLegs, has = (k) => this.horseParts[k];
+    if (L) {
+      if (has('bl')) { L.bl.hip.rotation.x = -1.2 * a; L.bl.knee.rotation.x = -0.05; }
+      if (has('br')) { L.br.hip.rotation.x = -1.2 * a; L.br.knee.rotation.x = -0.05; }
+      if (has('fl')) { L.fl.hip.rotation.x = 0.2 * a; }
+      if (has('fr')) { L.fr.hip.rotation.x = 0.2 * a; }
+    }
+    this._seatRider(0);
+    this.j.chest.rotation.x = -0.18 * a;
+  }
+
+  // AoE hoof strike: rear hits foes in front, kick hits foes behind.
+  _horseStrike(kind, game) {
+    const reach = 2.3;
+    const fx = Math.sin(this.facing), fz = Math.cos(this.facing);   // the way the horse faces
+    let hit = false;
+    for (const foe of game.enemiesWithin(this, reach)) {
+      if (!foe.alive || foe.hasSurrendered) continue;
+      const dx = foe.position.x - this.position.x;
+      const dz = foe.position.z - this.position.z;
+      const dot = dx * fx + dz * fz;                 // >0 in front, <0 behind
+      if (kind === 'rear' && dot < 0.3) continue;
+      if (kind === 'kick' && dot > -0.3) continue;
+      const dmg = this.stats.dmg * (kind === 'rear' ? 1.5 : 1.7) * (1 - foe.stats.toughness);
+      const dir = Math.sign(dx) || 1;
+      const wasAlive = foe.alive;
+      foe.applyDamage(dmg, -dir, true, game);
+      foe._knockback(this, kind === 'rear' ? 0.9 : 1.15);
+      this._v.set(foe.position.x, 1.0 + Math.random() * 0.3, foe.position.z);
+      game.spawnBlood(this._v, { x: -dir, z: 0 }, 9, 1.1);
+      game.spawnDust(foe.position.x, foe.position.z, 6, 1.3);
+      game.floatingText(foe.position, `${Math.round(dmg)}`, 0xffcaa0, 1.15);
+      if (wasAlive && !foe.alive && Math.random() < 0.4) foe._severRandom(true, this, game);
+      hit = true;
+    }
+    if (hit) game.spawnDust(this.position.x + fx * (kind === 'rear' ? 1 : -1), this.position.z + fz * (kind === 'rear' ? 1 : -1), 5, 1.2);
+  }
+
+  // Idle prance: a restless horse paws the ground with a front hoof now and then.
+  _prance(dt) {
+    if (!this.horseLegs) return;
+    if (this._pranceT === undefined) this._pranceT = -1;
+    if (this._pranceT < 0) {
+      this.pranceCd -= dt;
+      if (this.pranceCd <= 0) this._pranceT = 0;
+      return;
+    }
+    const a = Math.sin(this._pranceT * Math.PI);
+    const leg = this.horseParts.fl ? this.horseLegs.fl : (this.horseParts.fr ? this.horseLegs.fr : null);
+    if (leg) { leg.hip.rotation.x = -0.7 * a; leg.knee.rotation.x = -0.6 * a - 0.05; }
+    this._pranceT += dt * 1.6;
+    if (this._pranceT >= 1) { this._pranceT = -1; this.pranceCd = 3 + Math.random() * 4; }
   }
 
   // Pose the weapon arm (and, for two-handed weapons and bows, the off arm) into
@@ -936,7 +1179,10 @@ export class Unit {
     this._rest();                              // keeps weapon up & shield ready
     this.j.body.position.y = Math.sin(this.animT * 1.6) * 0.02;
     this.j.chest.rotation.x = -0.04 + Math.sin(this.animT * 1.6) * 0.02;
-    if (this.mounted) this._seatRider(Math.sin(this.animT * 1.6) * 0.02);
+    if (this.mounted) {
+      this._seatRider(Math.sin(this.animT * 1.6) * 0.02);
+      if (this.horseAlive) this._prance(dt);
+    }
     // Gentle breathing sway on the one-handed ready arm only (leave the polearm,
     // bow and two-handed holds as posed by _readyArms).
     if (!this.polearm && !this.isBow && !this.twoHanded) {

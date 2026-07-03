@@ -598,11 +598,19 @@ export class Game {
           dx = (a.id < b.id ? -1 : 1) * 0.05; dz = 0; d2 = 0.0025;
         }
         const d = Math.sqrt(d2);
-        const push = (min - d) * 0.5;
+        const overlap = min - d;
         const nx = dx / d;
         const nz = dz / d;
-        a.position.x -= nx * push; a.position.z -= nz * push;
-        b.position.x += nx * push; b.position.z += nz * push;
+        // Mass-weighted separation: the heavier body barely gives, the lighter
+        // is shoved aside — a galloping horse tramples through infantry. Mass
+        // scales with footprint (radius²), so a horse (~0.95) outweighs a
+        // soldier (~0.5) roughly 3.6:1.
+        const ma = a.radius * a.radius;
+        const mb = b.radius * b.radius;
+        const aShare = mb / (ma + mb);         // lighter body takes the bigger share
+        const bShare = ma / (ma + mb);
+        a.position.x -= nx * overlap * aShare; a.position.z -= nz * overlap * aShare;
+        b.position.x += nx * overlap * bShare; b.position.z += nz * overlap * bShare;
       }
     }
     for (const u of list) u._clampToField();
