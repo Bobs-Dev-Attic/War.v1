@@ -153,7 +153,21 @@ export class Input {
 
   _onWheel(e) {
     e.preventDefault();
-    this.world.zoom = THREE.MathUtils.clamp(this.world.zoom + e.deltaY * 0.02, 8, 46);
+    this._zoomAt(e.clientX, e.clientY, e.deltaY * 0.02);
+  }
+
+  // Zoom while keeping the ground point under (sx, sy) fixed on screen — like
+  // zooming a map toward the cursor.
+  _zoomAt(sx, sy, delta) {
+    const before = this._pickGround(sx, sy);
+    this.world.zoom = THREE.MathUtils.clamp(this.world.zoom + delta, 8, 46);
+    this.world.updateCamera();
+    if (!before) return;
+    const after = this._pickGround(sx, sy);
+    if (!after) return;
+    const t = this.world.target;
+    t.x = THREE.MathUtils.clamp(t.x + (before.x - after.x), -30, 30);
+    t.z = THREE.MathUtils.clamp(t.z + (before.z - after.z), -30, 30);
     this.world.updateCamera();
   }
 
@@ -195,9 +209,9 @@ export class Input {
     } else if (this.touches.size === 2) {
       const [a, b] = [...this.touches.values()];
       const d = Math.hypot(a.x - b.x, a.y - b.y);
-      this.world.zoom = THREE.MathUtils.clamp(this.world.zoom - (d - this.pinchDist) * 0.05, 8, 46);
+      // Pinch zooms toward the point between the two fingers.
+      this._zoomAt((a.x + b.x) / 2, (a.y + b.y) / 2, -(d - this.pinchDist) * 0.05);
       this.pinchDist = d;
-      this.world.updateCamera();
     }
   }
 
