@@ -12,9 +12,40 @@ dodges — while holding real weapons and shields.
 ## Gameplay
 
 You control the **Roman soldiers**; the **barbarian horde** charges automatically.
-Use the **top menu → New Battle** to muster custom armies (pick how many of each
-unit type per side), or **Rematch** to refight the same armies. When a battle ends
-you can **close the banner and watch the victors celebrate**, or start a new one.
+Use the **top menu → New Battle** to choose a **battlefield**, muster custom armies
+(pick how many of each unit type per side) and set each side's **formation**, or
+**Rematch** to refight the same armies. When a battle ends you can **close the
+banner and watch the victors celebrate**, or start a new one.
+
+### Battlefields
+
+Pick where and when you fight. Each battlefield sets its own **sky, light and
+time of day, weather** and surrounding **terrain**:
+
+| Field | Setting | Weather |
+| --- | --- | --- |
+| 🌾 Green Plains | Midday | Clear |
+| 🌅 Misty Dawn | Dawn | Fog |
+| 🌇 Amber Dusk | Dusk, long shadows | Clear |
+| 🌙 Moonlit Night | Night | Clear |
+| 🌧️ Stormy Fens | Overcast | Rain |
+| ❄️ Winter Frost | Grey winter | Snow |
+| 🏜️ Desert Noon | Harsh noon | Clear |
+| 🍂 Autumn Woods | Afternoon | Clear |
+
+The surrounding landscape is dressed with **trees** (broadleaf, snow-capped pine
+or palm to suit the setting), **rolling hills**, a **stream** with a timber
+**plank bridge**, boulders, and **ditches/earthworks** — while the central arena
+stays flat and clear for the fight. Rain and snow fall in real time; the stream
+ripples; the moon lights the night.
+
+### Formations
+
+Deploy each side in one of seven **formations** — **Line**, **Phalanx**,
+**Column**, **Wedge** (a charging point aimed at the foe), **Square**, **Echelon**
+(ranks stepped on a diagonal) or **Skirmish** (loose open order). The melee front
+always forms up nearest the enemy with ranged troops to the rear, and deep
+formations pack in tighter so they never spill off the field.
 
 ### Unit types
 
@@ -147,7 +178,9 @@ The repo is Vercel-ready (`vercel.json` sets the Vite framework preset).
 ```
 index.html          HUD, command menu, dossier, orientation guard
 src/main.js         bootstrap + render loop
-src/world.js        renderer, isometric camera, lights, terrain, scenery
+src/world.js        renderer, isometric camera, lights, terrain, environments, weather
+src/environments.js battlefield presets — sky, time of day, weather, terrain features
+src/formations.js   deployment formations (line, wedge, phalanx, square, …)
 src/humanoid.js     articulated model builder + all weapons/shields
 src/unitTypes.js    Roman & barbarian type hierarchy, army composition
 src/attributes.js   per-soldier attribute rolls + derived combat stats

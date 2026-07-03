@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { Unit } from './unit.js';
 import { DEFAULT_ARMY, composeArmy, UNIT_TYPES } from './unitTypes.js';
+import { formationOffsets, DEFAULT_FORMATION } from './formations.js';
+import { ENVIRONMENTS, DEFAULT_ENV } from './environments.js';
 
 export class Game {
   constructor(world, ui) {
@@ -30,6 +32,10 @@ export class Game {
       roman: { ...DEFAULT_ARMY.roman },
       barbarian: { ...DEFAULT_ARMY.barbarian },
     };
+    // Chosen battlefield and each side's starting formation.
+    this.environment = DEFAULT_ENV;
+    this.formations = { roman: DEFAULT_FORMATION, barbarian: DEFAULT_FORMATION };
+    if (world.applyEnvironment) world.applyEnvironment(ENVIRONMENTS[this.environment]);
 
     this.group = new THREE.Group();
     world.scene.add(this.group);
@@ -48,26 +54,18 @@ export class Game {
   }
 
   _formation(typeKeys, faction, line, spacing) {
-    // Lay a squad out in tidy rows facing the enemy; ranged units sit at the back.
+    // Deploy the squad in the side's chosen formation, facing the enemy; the
+    // melee front sits nearest the foe and ranged units fall to the rear.
     const order = typeKeys.slice().sort((a, b) => this._rankHint(a) - this._rankHint(b));
-    // Small squads keep the tidy near-square look; large armies grow WIDER
-    // rather than deeper so the back ranks never spill off the field edge
-    // (which would count them as routed the instant they spawn).
-    const MAX_ROWS = 6;
-    const perRow = Math.max(
-      Math.min(6, Math.max(3, Math.ceil(Math.sqrt(order.length) * 1.6))),
-      Math.ceil(order.length / MAX_ROWS),
-    );
-    // Pack rows a touch tighter when the army is deep so it stays in bounds.
-    const rowGap = order.length > 24 ? 1.9 : 2.2;
+    // Pack deep armies a touch tighter so they stay inside the field.
+    const rowGap = order.length > 24 ? 1.75 : 1.9;
+    const shape = (this.formations && this.formations[faction]) || DEFAULT_FORMATION;
+    const slots = formationOffsets(shape, order.length, spacing, rowGap);
     const dir = faction === 'roman' ? 1 : -1;
     order.forEach((key, i) => {
-      const row = Math.floor(i / perRow);
-      const col = i % perRow;
-      const rowCount = Math.min(perRow, order.length - row * perRow);
-      const x = (col - (rowCount - 1) / 2) * spacing;
-      const z = line + dir * row * rowGap;
-      this._add(faction, new THREE.Vector3(x, 0, z), key);
+      const s = slots[i] || { x: 0, depth: 0 };
+      const z = line + dir * s.depth;
+      this._add(faction, new THREE.Vector3(s.x, 0, z), key);
     });
   }
 
@@ -576,17 +574,22 @@ export class Game {
   }
 
   // Start a fresh battle with the given composition (from the setup screen).
-  startBattle(composition) {
+  startBattle(composition, settings) {
     if (composition) {
       this.composition = {
         roman: { ...composition.roman },
         barbarian: { ...composition.barbarian },
       };
     }
+    if (settings) {
+      if (settings.environment && ENVIRONMENTS[settings.environment]) this.environment = settings.environment;
+      if (settings.formations) this.formations = { ...this.formations, ...settings.formations };
+    }
     this.reset();
   }
 
   reset() {
+    if (this.world.applyEnvironment) this.world.applyEnvironment(ENVIRONMENTS[this.environment]);
     for (const u of this.units) u.dispose(this.world.scene);
     this.world.scene.remove(this.group);
     this.units = [];

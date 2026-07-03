@@ -41,6 +41,7 @@ function loop(now) {
   }
 
   game.update(dt);
+  world.updateEnvironment(dt);
   world.render();
   requestAnimationFrame(loop);
 }

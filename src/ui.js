@@ -1,5 +1,7 @@
 import { ATTRS, ATTR_LABELS } from './attributes.js';
 import { UNIT_TYPES, ROMAN_TYPES, BARBARIAN_TYPES, armyCount } from './unitTypes.js';
+import { ENVIRONMENTS, ENV_KEYS } from './environments.js';
+import { FORMATIONS, FORMATION_KEYS } from './formations.js';
 
 // The engine handles large armies comfortably (collision/AI are cheap and the
 // formation packs deep armies inside the field), so these caps are generous.
@@ -43,7 +45,10 @@ export class UI {
     });
     document.getElementById('setup-cancel').addEventListener('click', () => this.closeSetup());
     document.getElementById('setup-start').addEventListener('click', () => {
-      game.startBattle(this._setupComp);
+      game.startBattle(this._setupComp, {
+        environment: this._setupEnv,
+        formations: this._setupFormations,
+      });
       this.closeSetup();
     });
     document.getElementById('restart').addEventListener('click', () => game.reset());
@@ -53,15 +58,64 @@ export class UI {
 
   // ---- Battle setup ------------------------------------------------------
   openSetup() {
-    // Start from a copy of the current composition.
+    // Start from a copy of the current composition and battlefield settings.
     this._setupComp = {
       roman: { ...this.game.composition.roman },
       barbarian: { ...this.game.composition.barbarian },
     };
+    this._setupEnv = this.game.environment;
+    this._setupFormations = { ...this.game.formations };
     this._renderSetup('rome-types', ROMAN_TYPES, 'roman');
     this._renderSetup('horde-types', BARBARIAN_TYPES, 'barbarian');
+    this._renderEnvChoices();
+    this._renderFormationChoice('rome-formation', 'roman');
+    this._renderFormationChoice('horde-formation', 'barbarian');
     this._refreshSetupTotals();
     this.setup.classList.add('show');
+  }
+
+  // Battlefield picker: a row of environment tiles (settings / weather / time).
+  _renderEnvChoices() {
+    const host = document.getElementById('env-choices');
+    if (!host) return;
+    host.innerHTML = '';
+    for (const key of ENV_KEYS) {
+      const e = ENVIRONMENTS[key];
+      const tile = document.createElement('button');
+      tile.className = 'env-tile' + (key === this._setupEnv ? ' sel' : '');
+      tile.innerHTML = `<span class="env-emoji">${e.emoji}</span><span class="env-name">${e.label}</span><span class="env-time">${e.time}</span>`;
+      tile.addEventListener('click', () => {
+        this._setupEnv = key;
+        host.querySelectorAll('.env-tile').forEach((t) => t.classList.remove('sel'));
+        tile.classList.add('sel');
+      });
+      host.appendChild(tile);
+    }
+  }
+
+  // Per-side formation selector.
+  _renderFormationChoice(hostId, side) {
+    const host = document.getElementById(hostId);
+    if (!host) return;
+    host.innerHTML = '';
+    const sel = document.createElement('select');
+    sel.className = 'form-select';
+    for (const key of FORMATION_KEYS) {
+      const opt = document.createElement('option');
+      opt.value = key;
+      opt.textContent = FORMATIONS[key].label;
+      if (key === this._setupFormations[side]) opt.selected = true;
+      sel.appendChild(opt);
+    }
+    const desc = document.createElement('span');
+    desc.className = 'form-desc';
+    desc.textContent = FORMATIONS[this._setupFormations[side]].desc;
+    sel.addEventListener('change', () => {
+      this._setupFormations[side] = sel.value;
+      desc.textContent = FORMATIONS[sel.value].desc;
+    });
+    host.appendChild(sel);
+    host.appendChild(desc);
   }
 
   closeSetup() { this.setup.classList.remove('show'); }
