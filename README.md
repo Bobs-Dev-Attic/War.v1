@@ -78,15 +78,17 @@ attack patterns (`src/unitTypes.js`):
 
 **Rome** — Legionary (gladius + scutum), Hastatus (spear), Triarius (long pike,
 braced wall), Sagittarius (bow, kites & volleys), Veles (javelin skirmisher),
-Praetorian (elite guard), **Eques (cavalry — a swift, lance-armed lancer on
-horseback)**, **Onager (catapult — lobs a bursting boulder)** and **Ballista
+Praetorian (elite guard), **Eques (lance cavalry)**, **Cataphract (mounted
+swordsman — sword & shield from the saddle)**, **Eques Sagittarius (horse
+archer)**, **Onager (catapult — lobs a bursting boulder)** and **Ballista
 (a shield-piercing bolt-thrower)**.
 
 **The Horde** — Warrior (axe + shield), Berserker (greataxe, no shield, huge
 damage), Marauder (great maul, staggering smashes), Raider (spear + shield),
 Hunter (bow), Chieftain (towering elite champion), **Outrider (mounted axe
-raider — fast, hard-hitting horse cavalry)** and **Stone Thrower (a crude
-war-sling catapult)**.
+raider)**, **Reaver (mounted swordsman — sword & shield on horseback)**,
+**Steppe Archer (horse archer)** and **Stone Thrower (a crude war-sling
+catapult)**.
 
 ### Siege engines
 
@@ -103,7 +105,9 @@ a wrecked engine bursts into dust and splinters):
 - The **Ballista** throws a flat, fast **bolt** that **punches straight through
   shields** to skewer a single target — deadly counter-battery and champion-killer.
 
-**Cavalry** ride articulated horses that gallop into battle; a mount at full
+**Cavalry** ride articulated horses that gallop into battle — **lancers**,
+**sword-and-shield horsemen**, and **horse archers** who loose arrows on the move
+and wheel away. A mount at full
 health moves **at least twice as fast** as the quickest foot soldier and carries a
 bigger reach, at a higher point cost. A warhorse is its
 own creature: it has its own health and a heavy footprint that **tramples** lighter

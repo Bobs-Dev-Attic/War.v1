@@ -59,6 +59,20 @@ export const UNIT_TYPES = {
     stat: { hp: 1.08, dmg: 1.06, speed: 1.8 }, combos: [['spearThrust'], ['spearThrust', 'spearThrust']],
     desc: 'Cavalry — swift lancers who ride down stragglers.',
   },
+  cataphract: {
+    faction: 'roman', label: 'Cataphract', role: 'melee', reach: 2.0, points: 3,
+    cfg: { weapon: 'gladius', shield: 'scutum', helmet: 'roman', armor: 0xd0d5db, crest: 0x3a6acf, mounted: true, horse: 0x6a4a2a, saddleCloth: 0x3a5aa0 },
+    stat: { hp: 1.15, dmg: 1.05, toughness: 0.04, speed: 1.7 }, combos: 'roman',
+    desc: 'Mailed horseman — sword and shield wielded from the saddle.',
+  },
+  equesSagittarius: {
+    faction: 'roman', label: 'Eques Sagittarius', role: 'ranged', reach: 1.6, points: 3,
+    cfg: { weapon: 'bow', shield: null, helmet: 'romanLight', torso: 0x8a6a3a, torsoMetal: 0.1, pauldrons: false, skirt: 0x6a4a28, mounted: true, horse: 0x8a6a3a, saddleCloth: 0x8a2a2a },
+    stat: { hp: 0.95, speed: 1.7 },
+    ranged: { min: 4.5, max: 18, cooldown: 1.9, projectile: 'arrow', dmgMul: 1.0 },
+    combos: [['thrust']],
+    desc: 'Horse archer — looses arrows on the move, then wheels away.',
+  },
   onager: {
     faction: 'roman', label: 'Onager', role: 'siege', reach: 1.6, points: 5,
     cfg: { siege: 'onager', weapon: 'catapult', shield: null, frame: 0x6a4726, helmet: 'roman', armor: 0xb8b8c0, torso: 0x8a6a3a },
@@ -120,6 +134,20 @@ export const UNIT_TYPES = {
     cfg: { weapon: 'axe', shield: 'round', mounted: true, horse: 0x33261a, saddleCloth: 0x5a3a1e, hair: 0x6a3a1e },
     stat: { hp: 1.05, dmg: 1.08, speed: 1.85 }, combos: 'barbarian',
     desc: 'Horse raider — fast, hard-hitting riders of the horde.',
+  },
+  reaver: {
+    faction: 'barbarian', label: 'Reaver', role: 'melee', reach: 1.95, points: 3,
+    cfg: { weapon: 'gladius', shield: 'round', mounted: true, horse: 0x2a2016, saddleCloth: 0x5a3a1e, hair: 0x8a3a1e },
+    stat: { hp: 1.08, dmg: 1.06, speed: 1.8 }, combos: 'barbarian',
+    desc: 'Mounted swordsman — hacks foes down with sword and shield from horseback.',
+  },
+  steppeArcher: {
+    faction: 'barbarian', label: 'Steppe Archer', role: 'ranged', reach: 1.6, points: 3,
+    cfg: { weapon: 'bow', shield: null, torso: 0x6a4a2a, mounted: true, horse: 0x4a3320, saddleCloth: 0x5a3a1e, hair: 0x6a3a1e },
+    stat: { hp: 0.9, speed: 1.85 },
+    ranged: { min: 4, max: 16, cooldown: 1.7, projectile: 'arrow', dmgMul: 0.95 },
+    combos: [['thrust']],
+    desc: 'Horse archer — harries the enemy with arrows at the gallop.',
   },
   stonethrower: {
     faction: 'barbarian', label: 'Stone Thrower', role: 'siege', reach: 1.6, points: 5,
