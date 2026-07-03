@@ -24,6 +24,8 @@ The **New Battle** planner has three tabs:
 
 1. **📍 Location** — pick the battlefield (location, weather & time of day), with
    **🎲 Random** (roll a whole battle), **✕ Clear all**, and **↺ Defaults** shortcuts.
+   **Save** the whole configuration (battlefield + both armies) under a name and
+   **Load** it back later — saved battles persist in your browser.
 2. **🦅 Rome** — choose how many of each Roman unit type and split them into
    **groups**: when you have two or more of a type, set how many groups to divide
    them into, and each group gets its **own formation, facing and location**. Drag a
