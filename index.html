@@ -73,15 +73,21 @@
         <div class="setup-card">
           <button class="setup-close" id="setup-cancel" title="Close">×</button>
           <h2>Muster the Armies</h2>
-          <p class="setup-hint">Choose the make-up of each side, then take the field.</p>
+          <p class="setup-hint">Choose the battlefield, each side's make-up and formation, then take the field.</p>
+          <div class="setup-section">
+            <h4 class="setup-label">Battlefield</h4>
+            <div class="env-choices" id="env-choices"></div>
+          </div>
           <div class="setup-cols">
             <div class="setup-col rome">
               <h3>🦅 Rome <span class="col-total" id="rome-total">0</span></h3>
               <div class="type-list" id="rome-types"></div>
+              <div class="formation-pick"><span class="formation-lbl">Formation</span><span id="rome-formation"></span></div>
             </div>
             <div class="setup-col horde">
               <h3>🪓 The Horde <span class="col-total" id="horde-total">0</span></h3>
               <div class="type-list" id="horde-types"></div>
+              <div class="formation-pick"><span class="formation-lbl">Formation</span><span id="horde-formation"></span></div>
             </div>
           </div>
           <div class="setup-actions">
