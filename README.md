@@ -22,9 +22,10 @@ The **New Battle** planner has three tabs:
    **🎲 Random** (roll a whole battle), **✕ Clear all**, and **↺ Defaults** shortcuts.
 2. **🦅 Rome** — choose how many of each Roman unit type and split them into
    **groups**: when you have two or more of a type, set how many groups to divide
-   them into, and each group gets its **own formation and location**. Drag a
+   them into, and each group gets its **own formation, facing and location**. Drag a
    group's numbered anchor on the mini-map to deploy it anywhere on your half of
-   the field; the legend below the map sets each group's formation.
+   the field; the legend below the map sets each group's formation and lets you
+   **rotate it in 15° steps**.
 3. **🪓 The Horde** — the same, for the barbarian army.
 
 So you can, for example, field six legionaries as two groups — a wedge on the

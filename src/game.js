@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { Unit } from './unit.js';
 import { DEFAULT_ARMY, UNIT_TYPES } from './unitTypes.js';
-import { formationOffsets, DEFAULT_FORMATION, PLACEMENT_BOUNDS } from './formations.js';
+import { formationOffsets, rotateSlots, DEFAULT_FORMATION, PLACEMENT_BOUNDS } from './formations.js';
 import { ENVIRONMENTS, DEFAULT_ENV } from './environments.js';
 
 // A deployment is a list of GROUPS per side; each group is a block of one unit
@@ -12,7 +12,7 @@ export function defaultGroups() {
     const keys = Object.keys(army);
     const dz = side === 'roman' ? 9 : -9;
     return keys.map((k, i) => ({
-      typeKey: k, count: army[k], formation: DEFAULT_FORMATION,
+      typeKey: k, count: army[k], formation: DEFAULT_FORMATION, rot: 0,
       x: Math.round((i - (keys.length - 1) / 2) * 7), z: dz,
     }));
   };
@@ -71,7 +71,7 @@ export class Game {
     if (n <= 0) return;
     const spacing = faction === 'roman' ? 2.2 : 2.4;
     const rowGap = n > 24 ? 1.75 : 1.9;
-    const slots = formationOffsets(grp.formation || DEFAULT_FORMATION, n, spacing, rowGap);
+    const slots = rotateSlots(formationOffsets(grp.formation || DEFAULT_FORMATION, n, spacing, rowGap), grp.rot || 0);
     const dir = faction === 'roman' ? 1 : -1;
     for (let i = 0; i < n; i++) {
       const s = slots[i] || { x: 0, depth: 0 };
