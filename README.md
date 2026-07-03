@@ -98,6 +98,13 @@ foes back with the shield boss to reopen space. Every outcome surfaces as floati
 (**damage / CRIT / block / dodge / miss**). In a pure all-out charge the two
 factions are balanced ~50/50 — the player tips it with tactics.
 
+Fighting **wears soldiers down**: charging and swinging drain stamina, so the
+winded slow their pace and take longer between flurries — they recover their
+wind while idle or braced on guard. **Wounds slow you too** — a soldier bleeding
+near death moves at roughly half their healthy speed. And a fighter who **routs
+to the very edge** of the battlefield has fled for good and is counted among the
+dead.
+
 Body **colliders** keep any two units from occupying the same space; fallen
 bodies are walked over.
 
