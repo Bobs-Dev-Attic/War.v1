@@ -55,7 +55,8 @@ export class Game {
     this._moveMarkerGeo = new THREE.RingGeometry(0.25, 0.4, 20);
     this._moveMarkerGeo.rotateX(-Math.PI / 2);
 
-    this.spawnArmies();
+    // No battle on load — the title screen opens straight to the setup, which
+    // starts the first battle. The empty field is the title backdrop.
   }
 
   spawnArmies() {
@@ -621,6 +622,7 @@ export class Game {
   }
 
   _checkOutcome() {
+    if (this.units.length === 0) return;    // no battle mustered yet (title screen)
     const romans = this.livingRomans().length;
     const horde = this.livingHorde().length;
     const romansSurrendered = this.romans.every((u) => !u.alive || u.hasSurrendered);

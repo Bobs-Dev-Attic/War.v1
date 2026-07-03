@@ -34,6 +34,36 @@ html, body {
   transition: opacity .6s ease;
 }
 #loading.hidden { opacity: 0; pointer-events: none; }
+
+/* ---------- Landing / title screen ---------- */
+#landing {
+  position: absolute; inset: 0; z-index: 38;
+  display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(circle at 50% 35%, rgba(26,18,7,.72), rgba(5,7,10,.92) 72%);
+  backdrop-filter: blur(3px); transition: opacity .5s ease;
+}
+#landing.hidden { opacity: 0; pointer-events: none; }
+/* Hide the battle HUD while the title screen is up. */
+body.title #topbar, body.title #commands, body.title #selection-info { display: none; }
+.landing-card { text-align: center; padding: 20px 24px; max-width: min(560px, 92vw); }
+.landing-emblem { font-size: 54px; line-height: 1; margin-bottom: 6px; filter: drop-shadow(0 3px 10px rgba(0,0,0,.6)); }
+.landing-title {
+  font-size: clamp(46px, 10vw, 82px); letter-spacing: 4px; font-weight: 800; line-height: 1;
+  color: var(--gold); text-shadow: 0 4px 24px rgba(217,180,90,.35);
+}
+.landing-title .dot { color: var(--parch); opacity: .5; }
+.landing-version {
+  display: inline-block; margin: 12px 0 0; padding: 3px 12px; border-radius: 20px;
+  font-size: 13px; font-weight: 700; letter-spacing: 1px; color: var(--parch);
+  background: rgba(0,0,0,.4); border: 1px solid rgba(217,180,90,.35);
+}
+.landing-tagline { margin: 18px auto 26px; max-width: 420px; font-size: 14px; line-height: 1.5; opacity: .78; }
+.landing-btn {
+  padding: 14px 34px; font-family: inherit; font-size: 17px; font-weight: 700; cursor: pointer; letter-spacing: 1px;
+  color: #1a1207; background: linear-gradient(to bottom, var(--gold), #b8922f); border: none; border-radius: 9px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.5); transition: transform .1s, filter .15s;
+}
+.landing-btn:hover { filter: brightness(1.1); transform: translateY(-2px); }
 .loader-ring {
   width: 54px; height: 54px; border-radius: 50%;
   border: 4px solid rgba(217,180,90,.25); border-top-color: var(--gold);
