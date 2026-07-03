@@ -39,6 +39,9 @@ export class Unit {
     this.hp = this.maxHp;
     this.range = type.reach;
     this.speed = this.stats.speed;
+    this.baseSpeed = this.stats.speed;      // healthy, rested top speed
+    this.stamina = 1;                       // 1 = fresh, drains with exertion
+    this.staminaRegen = 0.05 + this.attrs.con * 0.004;
     this.attackTime = this.stats.attackTime;
     this.turnSpeed = this.stats.turn;
     this.stride = Math.random() * 10;       // gait cycle phase
@@ -302,6 +305,14 @@ export class Unit {
     if (this.celebrating) { this._animateCelebrate(dt); this._clampToField(); this._billboard(game); return; }
     if (this.crawling) { this._crawlUpdate(dt, game); return; }
 
+    // A soldier who routs to the very edge of the battlefield has fled the
+    // fight for good — count them among the dead. Retreat orders halt at
+    // z=±24 (well inside), so only genuine panicked flight reaches the rim.
+    if (this.state !== 'dead') {
+      const r2 = this.position.x * this.position.x + this.position.z * this.position.z;
+      if (r2 > 28 * 28) { this._die(0, game); this._billboard(game); return; }
+    }
+
     if (this.attackCooldown > 0) this.attackCooldown -= dt;
     if (this.rangedCooldown > 0) this.rangedCooldown -= dt;
     if (this.shoveCooldown > 0) this.shoveCooldown -= dt;
@@ -512,6 +523,10 @@ export class Unit {
     this.move = { def, name, t: 0, hitDone: false };
     this.state = def.type;
     this.spinOffset = 0;
+    // Swinging a weapon is hard work; heavy blows cost more wind.
+    if (def.type === 'attack') {
+      this.stamina = clamp(this.stamina - (def.heavy ? 0.06 : 0.035), 0.1, 1);
+    }
   }
 
   _advanceMove(dt, game) {
@@ -551,7 +566,8 @@ export class Unit {
       this.comboGap = 0.06 + Math.random() * 0.1;       // wind up the next strike
     } else if (def.type === 'attack') {
       this.combo = null;
-      this.attackCooldown = 0.25 + Math.random() * 0.35;
+      // The winded need longer to recover between flurries.
+      this.attackCooldown = (0.25 + Math.random() * 0.35) * (1 + (1 - this.stamina) * 0.8);
     } else {
       this.attackCooldown = Math.max(this.attackCooldown, 0.12 + Math.random() * 0.18);
     }
@@ -690,6 +706,22 @@ export class Unit {
     this.position.z += (dz / len) * amount;
   }
 
+  // Effective movement speed: the wounded and the tired slow down. A soldier
+  // near death and gasping moves at roughly a third of their fresh pace.
+  _moveSpeed() {
+    let s = this.baseSpeed;
+    s *= 0.5 + 0.5 * (this.hp / this.maxHp);        // injury: down to half at death's door
+    if (!this.parts.leftArm || !this.parts.rightArm) s *= 0.9; // maimed, off-balance
+    s *= 0.65 + 0.35 * this.stamina;                // fatigue: down to ~two-thirds when spent
+    return s;
+  }
+
+  // Catch your breath. Called from low-exertion states (idle, guard, hold);
+  // mult tempers recovery while still braced under a shield.
+  _recover(dt, mult = 1) {
+    this.stamina = clamp(this.stamina + dt * this.staminaRegen * mult, 0, 1);
+  }
+
   _moveToward(pointV, dt, gait = 'run') {
     const d = this._v2.copy(pointV).sub(this.position);
     d.y = 0;
@@ -700,8 +732,11 @@ export class Unit {
     this._turn(dt);
     // Walking is a deliberate half-speed reposition; running is a full charge.
     const speedMul = gait === 'run' ? 1 : 0.5;
-    const step = Math.min(this.speed * speedMul * dt, dist);
+    const step = Math.min(this._moveSpeed() * speedMul * dt, dist);
     this.position.addScaledVector(d, step);
+    // Sustained running is tiring; a walk costs far less. Sprinting drains a
+    // fresh soldier in roughly half a minute of steady charging.
+    this.stamina = clamp(this.stamina - dt * (gait === 'run' ? 0.045 : 0.012), 0.12, 1);
     this.state = 'moving';
     this.gait = gait;
     const freq = gait === 'run' ? 11 : 7;
@@ -750,6 +785,7 @@ export class Unit {
       if (!this.polearm) { this.j.rightShoulder.rotation.set(0.3, 0, 0); this.j.rightElbow.rotation.x = 1.2; }
     }
     this.state = 'guard';
+    this._recover(dt, 0.7);      // recover some wind while braced on guard
   }
 
   // ---- Facing ------------------------------------------------------------
@@ -840,6 +876,7 @@ export class Unit {
     if (!this.polearm && !(this.ranged && this.weaponKind === 'bow')) {
       this.j.rightShoulder.rotation.x = 0.3 + Math.sin(this.animT * 1.6 + 1) * 0.04;
     }
+    this._recover(dt);                         // idle: catch your breath fully
   }
 
   // Shared leg cycle. Forward is local -z, so a positive hip angle swings the
