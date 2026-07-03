@@ -1,11 +1,22 @@
 import * as THREE from 'three';
 import { buildHumanoid, ROMAN_CONFIG, BARBARIAN_CONFIG } from './humanoid.js';
-import { rollAttributes, deriveStats, pickName, rankFor } from './attributes.js';
+import { rollAttributes, deriveStats, pickName, rankFor, PROFILES } from './attributes.js';
 import { MOVES, pickCombo } from './moves.js';
 import { UNIT_TYPES } from './unitTypes.js';
 
 let _uid = 0;
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+// The fastest a foot soldier can ever be: the best possible Speed roll times the
+// quickest infantry type's speed bonus. Derived from the data so it stays right
+// if attributes or unit types change.
+const _MAX_SPD_ATTR = Math.max(...Object.values(PROFILES).map((p) => p.spd[1]));
+const _TOP_FOOT_TYPE_MUL = Math.max(1, ...Object.values(UNIT_TYPES)
+  .filter((t) => t.role !== 'siege' && !(t.cfg && t.cfg.mounted))
+  .map((t) => (t.stat && t.stat.speed) || 1));
+const TOP_FOOT_SPEED = deriveStats({ str: 18, dex: 18, con: 18, spd: _MAX_SPD_ATTR, exp: 18 }).speed * _TOP_FOOT_TYPE_MUL;
+// A mount at full health moves AT LEAST twice as fast as the fastest foot soldier.
+const MOUNTED_MIN_SPEED = 2 * TOP_FOOT_SPEED;
 
 export class Unit {
   constructor(faction, position, typeKey) {
@@ -80,6 +91,11 @@ export class Unit {
       this.horseParts = { head: true, fl: true, fr: true, bl: true, br: true };
       this.horseImmobile = false;
       this.mountSpeedMul = (type.stat && type.stat.speed) ? type.stat.speed : 1;
+      // Speed this rider would move on foot once thrown from the saddle.
+      this.footSpeed = this.stats.speed / this.mountSpeedMul;
+      // Mounted at full health = at least twice the fastest foot soldier.
+      this.baseSpeed = Math.max(this.stats.speed, MOUNTED_MIN_SPEED);
+      this.speed = this.baseSpeed;
       this.horseMove = null;              // { kind:'rear'|'kick', t, hitDone }
       this.horseAttackCd = Math.random() * 2;
       this.pranceCd = 1 + Math.random() * 3;
@@ -383,10 +399,10 @@ export class Unit {
     this.radius = 0.5 * scale;
     if (this.healthBar) this.healthBar.position.y = 2.15;
     if (this.selectionRing) this.selectionRing.geometry = new THREE.RingGeometry(0.55, 0.72, 32);
-    // Lose the horse's speed bonus — back to a foot-soldier's pace.
-    if (this.mountSpeedMul && this.mountSpeedMul !== 0) {
-      this.baseSpeed /= this.mountSpeedMul;
-      this.speed = this.baseSpeed;
+    // Lose the horse's speed entirely — back to a foot-soldier's pace.
+    if (this.footSpeed) {
+      this.baseSpeed = this.footSpeed;
+      this.speed = this.footSpeed;
     }
     // Stumble on landing.
     if (this.alive && !this.hasSurrendered) this._startMove('flinch');
@@ -1047,7 +1063,8 @@ export class Unit {
     this.stamina = clamp(this.stamina - dt * (gait === 'run' ? 0.045 : 0.012), 0.12, 1);
     this.state = 'moving';
     this.gait = gait;
-    const freq = this.mounted ? 14 : (gait === 'run' ? 11 : 7);
+    // Scale the gallop cadence with actual ground speed so the legs keep pace.
+    const freq = this.mounted ? Math.max(14, this._moveSpeed() * 1.9) : (gait === 'run' ? 11 : 7);
     this.stride += dt * freq;
     if (this.mounted) {
       // A galloping horse now and then bounds over an obstacle.
