@@ -1166,8 +1166,8 @@ export class Unit {
   // ---- Animations --------------------------------------------------------
   _rest() {
     const j = this.j;
-    j.body.position.y = 0;
-    j.chest.position.z = 0;               // clear any thrust-lunge offset
+    j.body.position.set(0, 0, 0);         // clear any lunge/bob offset (incl. thrust)
+    j.chest.position.z = 0;
     j.chest.rotation.set(0, 0, 0);
     j.head.rotation.set(0, 0, 0);
     j.leftHip.rotation.set(0, 0, 0);
