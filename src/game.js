@@ -320,10 +320,83 @@ export class Game {
     });
   }
 
+  // A heavy siege shot: a lobbed boulder (bursts in an area) or a flat ballista
+  // bolt (a fast, shield-piercing single-target dart).
+  spawnSiegeProjectile(shooter, aim, kind, dmg, aoeRadius, targetUnit) {
+    const g = new THREE.Group();
+    if (kind === 'boulder') {
+      const stone = new THREE.Mesh(
+        new THREE.SphereGeometry(0.24, 8, 6),
+        new THREE.MeshStandardMaterial({ color: 0x8f8f95, roughness: 0.95 })
+      );
+      g.add(stone);
+    } else {
+      const shaft = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.035, 0.035, 1.15, 6),
+        new THREE.MeshStandardMaterial({ color: 0x6b4a26, roughness: 0.85 })
+      );
+      shaft.rotation.z = Math.PI / 2; g.add(shaft);
+      const head = new THREE.Mesh(
+        new THREE.ConeGeometry(0.07, 0.24, 6),
+        new THREE.MeshStandardMaterial({ color: 0xcdd2d8, metalness: 0.6, roughness: 0.4 })
+      );
+      head.rotation.z = -Math.PI / 2; head.position.x = 0.62; g.add(head);
+    }
+    const from = new THREE.Vector3(shooter.position.x, 2.4, shooter.position.z);
+    g.position.copy(from);
+    g.castShadow = true;
+    this.group.add(g);
+    if (kind === 'boulder') {
+      const gy = this.world.heightAt ? this.world.heightAt(aim.x, aim.z) : 0;
+      const dist = Math.hypot(aim.x - from.x, aim.z - from.z);
+      this.projectiles.push({
+        mesh: g, kind: 'boulder', shooter, dmg, aoe: aoeRadius,
+        from: { x: from.x, y: from.y, z: from.z }, to: { x: aim.x, y: gy + 0.2, z: aim.z },
+        t: 0, flight: Math.min(1.8, Math.max(0.6, 0.5 + dist / 26)), arc: 4 + dist * 0.13,
+        spin: new THREE.Vector3((Math.random() - 0.5) * 6, (Math.random() - 0.5) * 6, (Math.random() - 0.5) * 6),
+      });
+    } else {
+      this.projectiles.push({ mesh: g, kind: 'bolt', target: targetUnit, shooter, dmg, speed: 34, life: 3, pierce: true });
+    }
+  }
+
+  // A lobbed boulder lands and bursts: everyone in the blast (friend or foe) is
+  // smashed and knocked flat, worst at the centre.
+  _boulderImpact(x, z, dmg, radius, shooter) {
+    this.spawnDust(x, z, 18, 2.4);
+    this.spawnDecal(x, z, radius * 0.8, 0.7);
+    const tmp = new THREE.Vector3();
+    for (const u of this.units) {
+      if (!u.alive || u.hasSurrendered) continue;
+      const d = Math.hypot(u.position.x - x, u.position.z - z);
+      if (d > radius) continue;
+      const fall = 1 - d / radius;                          // full at centre, tapering out
+      const hit = dmg * (0.4 + 0.6 * fall);
+      const dir = Math.sign(u.position.x - x) || 1;
+      const wasAlive = u.alive;
+      u.applyDamage(hit * (1 - u.stats.toughness * 0.5), dir, true, this);   // heavy, staggering
+      u._knockback({ position: { x, z } }, 0.6 + fall * 0.9);
+      tmp.set(u.position.x, 1.1, u.position.z);
+      this.spawnBlood(tmp, { x: dir, z: 0 }, 9, 1.2);
+      this.floatingText(u.position, `${Math.round(hit)}`, 0xffb060, 1.25);
+      if (wasAlive && !u.alive && Math.random() < 0.5) u._severRandom(true, shooter, this);
+    }
+  }
+
   _updateProjectiles(dt) {
     const tmp = new THREE.Vector3();
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const p = this.projectiles[i];
+      if (p.kind === 'boulder') {
+        p.t += dt;
+        const f = Math.min(1, p.t / p.flight);
+        p.mesh.position.x = p.from.x + (p.to.x - p.from.x) * f;
+        p.mesh.position.z = p.from.z + (p.to.z - p.from.z) * f;
+        p.mesh.position.y = p.from.y + (p.to.y - p.from.y) * f + p.arc * Math.sin(f * Math.PI);
+        p.mesh.rotation.x += p.spin.x * dt; p.mesh.rotation.y += p.spin.y * dt; p.mesh.rotation.z += p.spin.z * dt;
+        if (f >= 1) { this._boulderImpact(p.to.x, p.to.z, p.dmg, p.aoe, p.shooter); this._removeProjectile(i); }
+        continue;
+      }
       p.life -= dt;
       const tgt = p.target;
       const alive = tgt && tgt.alive && !tgt.hasSurrendered;
@@ -337,7 +410,7 @@ export class Game {
         p.mesh.rotation.y = Math.atan2(dir.x, dir.z) - Math.PI / 2;
         p.mesh.rotation.z = Math.asin(THREE.MathUtils.clamp(dir.y, -1, 1));
         if (dist < 0.6) {
-          tgt.receiveRanged(p.shooter, p.dmg, this);
+          tgt.receiveRanged(p.shooter, p.dmg, this, p.pierce ? { pierce: true, severChance: 0.55 } : null);
           this._removeProjectile(i);
           continue;
         }

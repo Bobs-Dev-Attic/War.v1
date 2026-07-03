@@ -59,6 +59,22 @@ export const UNIT_TYPES = {
     stat: { hp: 1.08, dmg: 1.06, speed: 1.8 }, combos: [['spearThrust'], ['spearThrust', 'spearThrust']],
     desc: 'Cavalry — swift lancers who ride down stragglers.',
   },
+  onager: {
+    faction: 'roman', label: 'Onager', role: 'siege', reach: 1.6, points: 5,
+    cfg: { siege: 'onager', weapon: 'catapult', shield: null, frame: 0x6a4726, helmet: 'roman', armor: 0xb8b8c0, torso: 0x8a6a3a },
+    stat: { hp: 1.5, toughness: 0.1, speed: 0, dmg: 1.2 },
+    ranged: { min: 9, max: 30, cooldown: 4.5, projectile: 'boulder', dmgMul: 2.4, aoe: 3.2 },
+    combos: [['thrust']],
+    desc: 'Catapult — lobs a boulder that bursts, smashing whole knots of foes.',
+  },
+  ballista: {
+    faction: 'roman', label: 'Ballista', role: 'siege', reach: 1.6, points: 4,
+    cfg: { siege: 'ballista', weapon: 'ballista', shield: null, frame: 0x6a4726, helmet: 'roman', armor: 0xb8b8c0, torso: 0x8a6a3a },
+    stat: { hp: 1.3, toughness: 0.08, speed: 0, dmg: 1.15 },
+    ranged: { min: 6, max: 34, cooldown: 2.6, projectile: 'bolt', dmgMul: 2.2, aoe: 0 },
+    combos: [['thrust']],
+    desc: 'Bolt-thrower — a giant flat-shooting dart that skewers and punches through shields.',
+  },
 
   // ---------------- Horde ----------------
   warrior: {
@@ -104,6 +120,14 @@ export const UNIT_TYPES = {
     cfg: { weapon: 'axe', shield: 'round', mounted: true, horse: 0x33261a, saddleCloth: 0x5a3a1e, hair: 0x6a3a1e },
     stat: { hp: 1.05, dmg: 1.08, speed: 1.85 }, combos: 'barbarian',
     desc: 'Horse raider — fast, hard-hitting riders of the horde.',
+  },
+  stonethrower: {
+    faction: 'barbarian', label: 'Stone Thrower', role: 'siege', reach: 1.6, points: 5,
+    cfg: { siege: 'stonethrower', weapon: 'catapult', shield: null, frame: 0x4a3018, torso: 0x6a4a2a, skin: 0xba7a4a },
+    stat: { hp: 1.5, toughness: 0.1, speed: 0, dmg: 1.22 },
+    ranged: { min: 9, max: 28, cooldown: 5.0, projectile: 'boulder', dmgMul: 2.4, aoe: 3.2 },
+    combos: [['thrust']],
+    desc: 'Crude war-sling — heaves a great rock that scatters and crushes ranks.',
   },
 };
 

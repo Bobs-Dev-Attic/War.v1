@@ -209,6 +209,19 @@ function shootPose(j, t) {
   j.head.rotation.y = 0.1 * draw;
 }
 
+function catapultPose(j, t) {
+  // The throwing arm rests laid back (~ -1.15), then SNAPS up and forward into
+  // the stop-beam, flinging the stone; it recoils and settles.
+  if (!j.siegeArm) return;
+  j.siegeArm.rotation.x = kf(t, [[0, -1.15], [0.5, -1.05], [0.6, 1.15], [0.7, 1.4], [0.82, 1.1], [1, 1.2]]);
+}
+
+function ballistaPose(j, t) {
+  // The whole slider recoils backward on release, then runs back out.
+  if (!j.siegeArm) return;
+  j.siegeArm.position.z = -0.15 + kf(t, [[0, 0], [0.48, 0], [0.55, 0.28], [0.7, 0.28], [1, 0]]);
+}
+
 function throwPose(j, t) {
   const wind = kf(t, [[0, 0.15], [0.4, -1.7], [0.5, -1.8], [0.62, 1.1], [0.78, 0.8], [1, 0.15]]);
   const el = kf(t, [[0, 0.25], [0.4, 1.4], [0.5, 1.3], [0.62, 0.3], [1, 0.25]]);
@@ -232,6 +245,8 @@ export const MOVES = {
   pikeThrust:  { type: 'attack', dur: 1.0, hit: [0.5, 0.66], dmgMul: 1.1, reach: 3.4, pose: pikeThrustPose },
   shoot:       { type: 'ranged', dur: 0.9, release: 0.6, projectile: 'arrow', pose: shootPose },
   throwJavelin: { type: 'ranged', dur: 0.72, release: 0.55, projectile: 'javelin', pose: throwPose },
+  catapultFire: { type: 'ranged', dur: 1.15, release: 0.63, projectile: 'boulder', pose: catapultPose },
+  ballistaFire: { type: 'ranged', dur: 0.8, release: 0.52, projectile: 'bolt', pose: ballistaPose },
   block:      { type: 'defense', dur: 0.55, pose: blockPose },
   dodgeL:     { type: 'defense', dur: 0.5, pose: dodgePose(1) },
   dodgeR:     { type: 'defense', dur: 0.5, pose: dodgePose(-1) },
