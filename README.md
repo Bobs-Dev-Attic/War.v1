@@ -90,7 +90,11 @@ ones ("mix & match") — so no two exchanges look alike. When a blow lands the
 **defender reacts** from their attributes: a nimble fighter may **dodge** (fully
 evade, hop aside), a shield-bearer may **block** (chip damage only), and
 telegraphed heavy attacks are easier to read. Bashes knock foes back; committed
-attackers trade blows. Every outcome surfaces as floating text
+attackers trade blows.
+
+**Stand Ground** is a genuine defensive posture: Romans hold the line, brace
+behind raised shields (better block & dodge), and periodically **shove** pressing
+foes back with the shield boss to reopen space. Every outcome surfaces as floating text
 (**damage / CRIT / block / dodge / miss**). In a pure all-out charge the two
 factions are balanced ~50/50 — the player tips it with tactics.
 

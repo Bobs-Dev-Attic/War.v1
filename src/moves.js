@@ -108,6 +108,22 @@ function bashPose(j, t) {
   j.chest.rotation.x = -0.14 * Math.sin(t * Math.PI);
 }
 
+// A hard shield shove: drive the boss into the foe to knock them back and open
+// up space. Low damage, big knockback.
+function shovePose(j, t) {
+  const push = kf(t, [[0, 0], [0.22, 0.25], [0.38, 1.15], [0.5, 1.05], [1, 0]]);
+  j.leftShoulder.rotation.x = push;            // shield rams forward
+  j.leftShoulder.rotation.z = 0.1;
+  j.leftElbow.rotation.x = 0.75;
+  j.rightShoulder.rotation.x = 0.35 * push;    // shoulder into it
+  j.rightElbow.rotation.x = 1.15;
+  const step = kf(t, [[0, 0], [0.38, 0.55], [0.5, 0.5], [1, 0]]);
+  j.leftHip.rotation.x = step;
+  j.leftKnee.rotation.x = -Math.max(0, step) * 0.9;
+  j.rightHip.rotation.x = -step * 0.3;
+  j.chest.rotation.x = -0.22 * Math.sin(t * Math.PI);
+}
+
 // ---- Defense poses -------------------------------------------------------
 
 function blockPose(j, t) {
@@ -204,6 +220,7 @@ export const MOVES = {
   slash:      { type: 'attack', dur: 0.72, hit: [0.4, 0.62], dmgMul: 1.1, reach: 1.9, pose: slashPose },
   spin:       { type: 'attack', dur: 1.0, hit: [0.3, 0.75], dmgMul: 1.2, reach: 2.0, spin: true, aoe: true, pose: spinPose },
   shieldBash: { type: 'attack', dur: 0.6, hit: [0.35, 0.5], dmgMul: 0.55, reach: 1.6, stagger: true, pose: bashPose },
+  shieldShove: { type: 'attack', dur: 0.5, hit: [0.28, 0.42], dmgMul: 0.35, reach: 1.7, stagger: true, shove: true, pose: shovePose },
   spearThrust: { type: 'attack', dur: 0.75, hit: [0.46, 0.6], dmgMul: 1.0, reach: 2.6, pose: spearThrustPose },
   pikeThrust:  { type: 'attack', dur: 1.0, hit: [0.5, 0.66], dmgMul: 1.1, reach: 3.4, pose: pikeThrustPose },
   shoot:       { type: 'ranged', dur: 0.9, release: 0.6, projectile: 'arrow', pose: shootPose },

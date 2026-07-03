@@ -52,6 +52,9 @@ export class Unit {
 
     const base = faction === 'roman' ? ROMAN_CONFIG : BARBARIAN_CONFIG;
     const cfg = { ...base, ...type.cfg };
+    this.weaponKind = cfg.weapon;
+    this.polearm = cfg.weapon === 'spear' || cfg.weapon === 'pike';
+    this.shoveCooldown = Math.random() * 1.5;
     const built = buildHumanoid(cfg);
     this.root = built.root;
     this.j = built.joints;
@@ -199,6 +202,9 @@ export class Unit {
 
     if (this.attackCooldown > 0) this.attackCooldown -= dt;
     if (this.rangedCooldown > 0) this.rangedCooldown -= dt;
+    if (this.shoveCooldown > 0) this.shoveCooldown -= dt;
+    // Shield-bearers told to Stand Ground brace defensively.
+    this.defensive = this.order === 'hold' && this.hasShield;
 
     // --- Combat action layer: a committed move (attack/defense/flinch) plays out.
     if (this.move) { this._advanceMove(dt, game); this._finishFrame(game); return; }
@@ -268,7 +274,16 @@ export class Unit {
         this._stepToward(target.position, dt, dist > this.range + 1.6 ? 'run' : 'walk');
       }
     } else if (this.attackCooldown <= 0) {
-      this._launchCombo(target);
+      // Shield-bearers holding the line shove pressing foes back to make space;
+      // aggressors do it now and then to stagger a swing.
+      if (this.hasShield && this.shoveCooldown <= 0 && dist <= this.range + 0.15 &&
+          Math.random() < (this.order === 'hold' ? 0.18 : 0.07)) {
+        this.shoveCooldown = 3.5 + Math.random() * 2.5;
+        this._comboTarget = target;
+        this._startMove('shieldShove');
+      } else {
+        this._launchCombo(target);
+      }
       this._animateGuard(dt);
     } else {
       this._animateGuard(dt);                 // in reach, recovering — ready stance
@@ -279,17 +294,19 @@ export class Unit {
   // closes, or draw a sidearm when cornered.
   _rangedUpdate(dt, game, target, dist) {
     const rg = this.ranged;
-    if (dist <= this.range && (rg.meleeFallback || dist < rg.min * 0.6)) {
-      // Enemy is on top of us — fight with the sidearm.
+    // In the endgame, stop kiting and commit so the fight actually ends.
+    const endgame = (game.livingRomans().length + game.livingHorde().length) <= 3;
+    if (dist <= this.range && (rg.meleeFallback || dist < rg.min * 0.6 || endgame)) {
+      // Enemy is on top of us (or the field is nearly clear) — draw the sidearm.
       this._meleeUpdate(dt, game, target, dist);
       return;
     }
-    if (dist < rg.min) {
+    if (dist < rg.min && !endgame) {
       // Too close — backpedal to reopen the range.
       const ax = this.position.x - target.position.x;
       const az = this.position.z - target.position.z;
       const len = Math.hypot(ax, az) || 1;
-      const flee = this._v.set(this.position.x + (ax / len) * 4, 0, this.position.z + (az / len) * 4);
+      const flee = this._v.set(this.position.x + (ax / len) * 2.5, 0, this.position.z + (az / len) * 2.5);
       this._moveToward(flee, dt, 'run');
       return;
     }
@@ -423,7 +440,7 @@ export class Unit {
         crit ? 0xffd24f : this.faction === 'roman' ? 0xffe0a0 : 0xff9a70,
         crit ? 1.35 : 1
       );
-      if (m.stagger) tgt._knockback(this, 0.3);
+      if (m.stagger) tgt._knockback(this, m.shove ? 0.85 : 0.3);
     }
   }
 
@@ -431,8 +448,10 @@ export class Unit {
   _defend(attacker, m, game) {
     // Committed to your own swing — no free reactions, trade blows.
     if (this.move && this.move.def.type === 'attack') return 'hit';
+    // Holding the line with a shield up = actively defending: much better reads.
+    const braced = this.defensive ? 1 : 0;
     // Sidestep: nimble fighters read heavy, telegraphed attacks more easily.
-    let dodgeP = Math.min(0.3, this.stats.dodge * (m.heavy ? 1.25 : 1));
+    let dodgeP = Math.min(0.3 + 0.04 * braced, this.stats.dodge * (1 + 0.15 * braced) * (m.heavy ? 1.25 : 1));
     if (Math.random() < dodgeP) {
       this._interruptWith(Math.random() < 0.5 ? 'dodgeL' : 'dodgeR', attacker);
       game.floatingText(this.position, 'dodge', 0x8fd0ff, 0.85);
@@ -440,7 +459,7 @@ export class Unit {
     }
     // Shield block (a bash punches straight through).
     if (this.hasShield && !m.stagger) {
-      const blockP = Math.min(0.47, this.stats.block * (m.aoe ? 0.85 : 1));
+      const blockP = Math.min(0.47 + 0.07 * braced, this.stats.block * (1 + 0.2 * braced) * (m.aoe ? 0.85 : 1));
       if (Math.random() < blockP) {
         this._interruptWith('block', attacker);
         const chip = attacker.stats.dmg * (m.dmgMul || 1) * 0.12;   // shields still ring
@@ -544,9 +563,24 @@ export class Unit {
     this.j.rightHip.rotation.x = -0.14;
     this.j.leftKnee.rotation.x = -0.22;
     this.j.rightKnee.rotation.x = -0.22;
-    this.j.rightShoulder.rotation.set(-0.35, 0, 0);   // blade up, ready
-    this.j.rightElbow.rotation.x = 1.05;
+    if (this.polearm) {
+      // Level the shaft at the foe rather than raising a blade.
+      this.j.rightShoulder.rotation.set(-0.16, 0, 0.12);
+      this.j.rightElbow.rotation.x = 0.0;
+    } else {
+      this.j.rightShoulder.rotation.set(0.3, 0, 0);   // blade up at the ready
+      this.j.rightElbow.rotation.x = 1.5;
+    }
     this._applyHold();                                 // shield in guard
+    if (this.defensive) {
+      // Brace hard behind the shield: raised, crouched, weapon tucked.
+      this.j.leftShoulder.rotation.set(0.7, 0, 0.34);
+      this.j.leftElbow.rotation.x = 1.4;
+      this.j.chest.rotation.x = -0.15;
+      this.j.leftKnee.rotation.x = -0.3;
+      this.j.rightKnee.rotation.x = -0.3;
+      if (!this.polearm) { this.j.rightShoulder.rotation.set(0.3, 0, 0); this.j.rightElbow.rotation.x = 1.2; }
+    }
     this.state = 'guard';
   }
 
@@ -603,8 +637,20 @@ export class Unit {
     j.rightKnee.rotation.set(0, 0, 0);
     // Shield arm held in guard.
     this._applyHold();
-    j.rightShoulder.rotation.set(0.15, 0, 0);
-    j.rightElbow.rotation.set(0.25, 0, 0);
+    if (this.polearm) {
+      // Level the long shaft forward (near-straight arm) so it doesn't stab the
+      // ground; a slight up-tilt keeps the point ahead of the foe.
+      j.rightShoulder.rotation.set(-0.12, 0, 0.14);
+      j.rightElbow.rotation.set(0.0, 0, 0);
+    } else if (this.ranged && this.weaponKind === 'bow') {
+      // Archer's draw hand rests near the string.
+      j.rightShoulder.rotation.set(0.2, 0, 0);
+      j.rightElbow.rotation.set(0.6, 0, 0);
+    } else {
+      // Weapon held READY forward (blade up at the ready), never at the ground.
+      j.rightShoulder.rotation.set(0.3, 0, 0);
+      j.rightElbow.rotation.set(1.5, 0, 0);
+    }
   }
 
   _applyHold() {
@@ -619,12 +665,13 @@ export class Unit {
 
   _animateIdle(dt) {
     this.animT += dt;
-    this._rest();
-    const b = Math.sin(this.animT * 1.6) * 0.02;
-    this.j.body.position.y = b;
-    this.j.chest.rotation.x = 0.04 + Math.sin(this.animT * 1.6) * 0.02;
-    // Weapon ready at side.
-    this.j.rightShoulder.rotation.x = 0.2 + Math.sin(this.animT * 1.6 + 1) * 0.03;
+    this._rest();                              // keeps weapon up & shield ready
+    this.j.body.position.y = Math.sin(this.animT * 1.6) * 0.02;
+    this.j.chest.rotation.x = -0.04 + Math.sin(this.animT * 1.6) * 0.02;
+    // Gentle breathing sway on the ready weapon arm.
+    if (!this.polearm && !(this.ranged && this.weaponKind === 'bow')) {
+      this.j.rightShoulder.rotation.x = 0.3 + Math.sin(this.animT * 1.6 + 1) * 0.04;
+    }
   }
 
   // Shared leg cycle. Forward is local -z, so a positive hip angle swings the
