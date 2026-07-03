@@ -16,23 +16,24 @@ The game opens on a **title screen** (showing the current version) with a single
 no battle is fought until you muster one.
 
 You control the **Roman soldiers**; the **barbarian horde** charges automatically.
-Use the **top menu → New Battle** to open the **tabbed battle planner**, or
-**Rematch** to refight the same armies. When a battle ends you can **close the
-banner and watch the victors celebrate**, or start a new one.
+Use the **top menu → New Battle** to open the **battle planner**, or **Rematch**
+to refight the same armies. When a battle ends the result appears as a **slim
+banner across the top** of the screen — so the whole field stays in view and you
+can **watch the victors celebrate** — with Rematch / New Battle right there.
 
-The **New Battle** planner has three tabs:
+The **New Battle** planner has two tabs:
 
 1. **📍 Location** — pick the battlefield (location, weather & time of day), with
    **🎲 Random** (roll a whole battle), **✕ Clear all**, and **↺ Defaults** shortcuts.
    **Save** the whole configuration (battlefield + both armies) under a name and
    **Load** it back later — saved battles persist in your browser.
-2. **🦅 Rome** — choose how many of each Roman unit type and split them into
-   **groups**: when you have two or more of a type, set how many groups to divide
-   them into, and each group gets its **own formation, facing and location**. Drag a
-   group's numbered anchor on the mini-map to deploy it anywhere on your half of
-   the field; the legend below the map sets each group's formation and lets you
-   **rotate it in 15° steps**.
-3. **🪓 The Horde** — the same, for the barbarian army.
+2. **⚔️ Deploy Armies** — the **battlefield mini-map is the interface**. It shows
+   the whole field at once: the **Horde's half up top**, **Rome's below**. **Click
+   an empty spot to drop a unit group**, then configure it in the pop-up dialog —
+   **unit type, quantity, formation and facing**. **Click or drag a marker** to move
+   it; click it again to edit or **remove** it. Each marker's numbered anchor shows
+   its size and an arrow shows which way it faces. Both armies are placed the same
+   way on the one map.
 
 So you can, for example, field six legionaries as two groups — a wedge on the
 left flank and a square holding the right — each placed independently.
