@@ -107,6 +107,7 @@ export class Unit {
     this.parts = { head: true, leftArm: true, rightArm: true, leftLeg: true, rightLeg: true };
     this.crawling = false;
     this.disarmed = false;
+    this._inWall = 0;                        // holding allies packed in alongside (shield-wall strength)
 
     // Combat move/combo state.
     this.move = null;                        // { def, name, t, hitDone } while a move plays
@@ -130,6 +131,12 @@ export class Unit {
   }
 
   get position() { return this.root.position; }
+
+  // Footprint used for unit-vs-unit separation. A braced shield wall packs in
+  // tighter than loose troops, letting a Stand-Ground line close its gaps.
+  collisionRadius() {
+    return (this.defensive && this.order === 'hold') ? this.radius * 0.78 : this.radius;
+  }
 
   _buildHealthBar() {
     const bar = new THREE.Group();
@@ -441,6 +448,7 @@ export class Unit {
     if (this.mounted && this.horseAlive && this.horseAttackCd > 0) this.horseAttackCd -= dt;
     // Shield-bearers told to Stand Ground brace defensively.
     this.defensive = this.order === 'hold' && this.hasShield && !this.disarmed;
+    if (this.order !== 'hold') this._inWall = 0;
 
     // The horse is mid-rear or mid-kick — play it out before anything else.
     if (this.horseMove) { this._advanceHorseMove(dt, game); this._finishFrame(game); return; }
@@ -524,7 +532,9 @@ export class Unit {
     this._faceTarget(target, dt);
     if (dist > this.range) {
       if (this.order === 'hold' && dist > this.range + 0.4) {
-        this._enterIdle(dt);                  // hold position, face the foe
+        this._holdFormUp(dt, game);           // Stand Ground: close ranks into a shield wall
+      } else if (this.order === 'aggressive' && !this.mounted && dist > this.range + 3) {
+        this._advanceInLine(dt, game, target, dist > this.range + 1.6 ? 'run' : 'walk');
       } else {
         this._stepToward(target.position, dt, dist > this.range + 1.6 ? 'run' : 'walk');
       }
@@ -549,6 +559,65 @@ export class Unit {
     } else {
       this._animateGuard(dt);                 // in reach, recovering — ready stance
     }
+  }
+
+  // Stand Ground tactic: rather than holding a lone spot, soldiers close ranks —
+  // shuffling in tight with nearby holding comrades to lock a shared shield wall
+  // (a Roman testudo / barbarian skjaldborg) that faces the foe. The pull is
+  // biased sideways so the knot tightens laterally into a wall instead of
+  // collapsing back off the line.
+  _holdFormUp(dt, game) {
+    const foe = game.nearestEnemy(this);
+    if (foe) this._faceTarget(foe, dt);
+    const allies = game.alliesWithin(this, 6.5)
+      .filter((u) => u.order === 'hold' && !u.crawling && !u.disarmed && !u.mounted);
+    this._inWall = allies.length;
+    if (allies.length === 0) { this._enterIdle(dt); return; }
+    let cx = this.position.x, cz = this.position.z;
+    for (const a of allies) { cx += a.position.x; cz += a.position.z; }
+    const n = allies.length + 1;
+    let sx = cx / n - this.position.x, sz = cz / n - this.position.z;
+    if (foe) {
+      // Damp the component along the foe axis so we close side gaps, not fore/aft.
+      const fx = foe.position.x - this.position.x, fz = foe.position.z - this.position.z;
+      const fl = Math.hypot(fx, fz) || 1, ux = fx / fl, uz = fz / fl;
+      const along = sx * ux + sz * uz;
+      sx -= ux * along * 0.7; sz -= uz * along * 0.7;
+    }
+    const d = Math.hypot(sx, sz);
+    if (d > 1.2) {
+      // A slow, disciplined dressing of the ranks — never a charge.
+      const step = Math.min(this._moveSpeed() * 0.4 * dt, d);
+      this.position.x += (sx / d) * step;
+      this.position.z += (sz / d) * step;
+      this.stride += dt * 6;
+      this.state = 'moving'; this.gait = 'walk';
+      this._animateWalk();
+    } else {
+      this._animateGuard(dt);                 // packed in — brace behind the wall
+    }
+  }
+
+  // Attack tactic: on the approach, advance as a battle line — steer at the foe
+  // but let a little lateral cohesion dress the ranks, so troops hit together
+  // instead of stringing out into a scattered rush. The closing (fore/aft) speed
+  // is untouched, so charges still connect.
+  _advanceInLine(dt, game, target, gait) {
+    let dx = target.position.x - this.position.x, dz = target.position.z - this.position.z;
+    const dl = Math.hypot(dx, dz) || 1; dx /= dl; dz /= dl;
+    const allies = game.alliesWithin(this, 5)
+      .filter((u) => u.order === 'aggressive' && !u.crawling && !u.disarmed && !u.mounted);
+    if (allies.length) {
+      let cx = 0, cz = 0;
+      for (const a of allies) { cx += a.position.x; cz += a.position.z; }
+      let sx = cx / allies.length - this.position.x, sz = cz / allies.length - this.position.z;
+      const along = sx * dx + sz * dz;          // keep only the lateral part
+      sx -= dx * along; sz -= dz * along;
+      dx += sx * 0.25; dz += sz * 0.25;
+      const nl = Math.hypot(dx, dz) || 1; dx /= nl; dz /= nl;
+    }
+    this._v.set(this.position.x + dx * 3, 0, this.position.z + dz * 3);
+    this._moveToward(this._v, dt, gait);
   }
 
   // Archers & javelineers: keep to their band and loose volleys; flee if a foe
@@ -779,9 +848,12 @@ export class Unit {
       game.floatingText(this.position, 'dodge', 0x8fd0ff, 0.85);
       return 'dodge';
     }
-    // Shield block (a bash punches straight through).
+    // Shield block (a bash punches straight through). A locked shield wall —
+    // two or more braced comrades packed alongside — is markedly harder to break.
+    const wall = (this.defensive && this._inWall >= 2) ? 1 : 0;
     if (this.hasShield && !m.stagger) {
-      const blockP = Math.min(0.47 + 0.07 * braced, this.stats.block * (1 + 0.2 * braced) * (m.aoe ? 0.85 : 1));
+      const blockP = Math.min(0.47 + 0.07 * braced + 0.08 * wall,
+        this.stats.block * (1 + 0.2 * braced + 0.15 * wall) * (m.aoe ? 0.85 : 1));
       if (Math.random() < blockP) {
         this._interruptWith('block', attacker);
         const chip = attacker.stats.dmg * (m.dmgMul || 1) * 0.12;   // shields still ring
