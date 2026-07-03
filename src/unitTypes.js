@@ -56,7 +56,7 @@ export const UNIT_TYPES = {
   eques: {
     faction: 'roman', label: 'Eques', role: 'melee', reach: 2.6, points: 3,
     cfg: { weapon: 'spear', shield: 'parma', helmet: 'romanLight', crest: 0x3a6acf, mounted: true, horse: 0x7a4a28, saddleCloth: 0x8a2a2a },
-    stat: { hp: 1.08, dmg: 1.06, speed: 1.5 }, combos: [['spearThrust'], ['spearThrust', 'spearThrust']],
+    stat: { hp: 1.08, dmg: 1.06, speed: 1.8 }, combos: [['spearThrust'], ['spearThrust', 'spearThrust']],
     desc: 'Cavalry — swift lancers who ride down stragglers.',
   },
 
@@ -102,7 +102,7 @@ export const UNIT_TYPES = {
   outrider: {
     faction: 'barbarian', label: 'Outrider', role: 'melee', reach: 1.95, points: 3,
     cfg: { weapon: 'axe', shield: 'round', mounted: true, horse: 0x33261a, saddleCloth: 0x5a3a1e, hair: 0x6a3a1e },
-    stat: { hp: 1.05, dmg: 1.08, speed: 1.55 }, combos: 'barbarian',
+    stat: { hp: 1.05, dmg: 1.08, speed: 1.85 }, combos: 'barbarian',
     desc: 'Horse raider — fast, hard-hitting riders of the horde.',
   },
 };
