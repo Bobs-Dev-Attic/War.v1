@@ -123,12 +123,12 @@ html, body {
 .outcome-card h1.win { color: var(--gold); text-shadow: 0 0 20px rgba(217,180,90,.5); }
 .outcome-card h1.lose { color: var(--rome-glow); text-shadow: 0 0 20px rgba(212,58,58,.5); }
 .outcome-card p { opacity: .8; margin-bottom: 22px; font-size: 15px; }
-#restart {
+#restart, #new-battle {
   padding: 12px 26px; font-family: inherit; font-size: 15px; font-weight: 700; cursor: pointer;
   color: #1a1207; background: linear-gradient(to bottom, var(--gold), #b8922f);
   border: none; border-radius: 8px; letter-spacing: 1px; transition: transform .08s, filter .15s;
 }
-#restart:hover { filter: brightness(1.1); transform: translateY(-2px); }
+#restart:hover, #new-battle:hover { filter: brightness(1.1); transform: translateY(-2px); }
 
 /* ---------- Outcome extras ---------- */
 .outcome-close, .setup-close {
@@ -140,8 +140,6 @@ html, body {
 .outcome-close:hover, .setup-close:hover { background: rgba(217,180,90,.25); border-color: var(--gold); }
 .outcome-card { position: relative; }
 .outcome-actions { display: flex; gap: 10px; justify-content: center; }
-.outcome-card button.ghost { background: transparent; color: var(--gold); border: 1px solid var(--gold); }
-.outcome-card button.ghost:hover { background: rgba(217,180,90,.15); }
 .outcome-tip { margin: 14px 0 0; font-size: 12px; opacity: .55; }
 
 /* ---------- Battle setup ---------- */
