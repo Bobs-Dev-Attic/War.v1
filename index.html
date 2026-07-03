@@ -86,8 +86,7 @@
           <h2>Prepare for Battle</h2>
           <div class="setup-tabs">
             <button class="setup-tab active" data-tab="location">📍 Location</button>
-            <button class="setup-tab" data-tab="rome">🦅 Rome</button>
-            <button class="setup-tab" data-tab="horde">🪓 The Horde</button>
+            <button class="setup-tab" data-tab="deploy">⚔️ Deploy Armies</button>
           </div>
 
           <!-- Tab 1: Location & weather -->
@@ -108,32 +107,41 @@
             <p class="setup-hint">Pick where and when you fight, then set each army in the Rome and Horde tabs.</p>
           </div>
 
-          <!-- Tab 2: Rome -->
-          <div class="setup-panel" data-panel="rome">
-            <div class="army-editor">
-              <div class="army-types">
-                <div class="army-head">🦅 Legion <span class="col-total" id="rome-total">0</span></div>
-                <div class="type-list" id="rome-types"></div>
+          <!-- Tab 2: Deploy — the battlefield map is the interface -->
+          <div class="setup-panel" data-panel="deploy">
+            <div class="deploy-editor">
+              <div class="deploy-mapwrap">
+                <canvas id="field-map" width="460" height="460"></canvas>
+                <!-- Marker config dialog (popover over the map) -->
+                <div class="marker-dialog" id="marker-dialog" hidden>
+                  <div class="md-head">
+                    <span class="md-side rome" id="md-side">🦅 Rome</span>
+                    <button class="md-close" id="md-close" title="Close">×</button>
+                  </div>
+                  <label class="md-field"><span>Unit</span>
+                    <select id="md-type" class="md-select"></select></label>
+                  <p class="md-desc" id="md-desc"></p>
+                  <div class="md-grid">
+                    <label class="md-field"><span>Quantity</span>
+                      <select id="md-count" class="md-select"></select></label>
+                    <label class="md-field"><span>Formation</span>
+                      <select id="md-formation" class="md-select"></select></label>
+                  </div>
+                  <label class="md-field"><span>Facing</span>
+                    <button class="md-rot" id="md-rot">⟳ 0°</button></label>
+                  <div class="md-actions">
+                    <button class="md-del" id="md-del">🗑 Remove</button>
+                    <button class="md-done" id="md-done">Done</button>
+                  </div>
+                </div>
               </div>
-              <div class="army-map">
-                <span class="map-lbl">Deployment — pick a group, drag to position</span>
-                <canvas id="rome-map" width="240" height="240"></canvas>
-                <div class="group-legend" id="rome-legend"></div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Tab 3: The Horde -->
-          <div class="setup-panel" data-panel="horde">
-            <div class="army-editor">
-              <div class="army-types">
-                <div class="army-head">🪓 Horde <span class="col-total" id="horde-total">0</span></div>
-                <div class="type-list" id="horde-types"></div>
-              </div>
-              <div class="army-map">
-                <span class="map-lbl">Deployment — pick a group, drag to position</span>
-                <canvas id="horde-map" width="240" height="240"></canvas>
-                <div class="group-legend" id="horde-legend"></div>
+              <div class="deploy-side">
+                <div class="deploy-totals">
+                  <span class="dt rome">🦅 Rome <b id="rome-total">0</b></span>
+                  <span class="dt horde">🪓 Horde <b id="horde-total">0</b></span>
+                </div>
+                <p class="deploy-hint" id="deploy-hint">Click the battlefield to place a unit group. The top half is the Horde's, the bottom is Rome's. Click or drag a marker to move it; click again to edit or remove.</p>
+                <div class="deploy-list" id="deploy-list"></div>
               </div>
             </div>
           </div>
@@ -144,17 +152,18 @@
         </div>
       </div>
 
-      <!-- Outcome banner -->
+      <!-- Outcome banner — a slim bar across the top so the celebration stays in view -->
       <div id="outcome">
-        <div class="outcome-card">
-          <button class="outcome-close" id="outcome-close" title="Watch the field">×</button>
-          <h1 id="outcome-title">VICTORY</h1>
-          <p id="outcome-sub"></p>
+        <div class="outcome-banner">
+          <div class="outcome-msg">
+            <h1 id="outcome-title">VICTORY</h1>
+            <p id="outcome-sub"></p>
+          </div>
           <div class="outcome-actions">
             <button id="restart">↻ Rematch</button>
             <button id="new-battle">⚔ New Battle</button>
+            <button class="outcome-close" id="outcome-close" title="Watch the field">×</button>
           </div>
-          <p class="outcome-tip">or close to watch the victors celebrate</p>
         </div>
       </div>
     </div>
