@@ -1,5 +1,11 @@
 import * as THREE from 'three';
 
+// Camera zoom range (orthographic half-extent): smaller = closer in, larger =
+// farther out. A wide range lets you get right down among the soldiers or pull
+// back to survey the whole battlefield.
+const ZOOM_MIN = 4;
+const ZOOM_MAX = 72;
+
 // Handles all player input: rotating/zooming the isometric camera, selecting
 // legionaries (click or marquee) and issuing move/attack orders.
 export class Input {
@@ -180,7 +186,7 @@ export class Input {
   // zooming a map toward the cursor.
   _zoomAt(sx, sy, delta) {
     const before = this._pickGround(sx, sy);
-    this.world.zoom = THREE.MathUtils.clamp(this.world.zoom + delta, 8, 46);
+    this.world.zoom = THREE.MathUtils.clamp(this.world.zoom + delta, ZOOM_MIN, ZOOM_MAX);
     this.world.updateCamera();
     if (!before) return;
     const after = this._pickGround(sx, sy);
@@ -201,8 +207,8 @@ export class Input {
     else if (k === 'escape') this.game.clearSelection();
     else if (k === 'arrowleft') { this.world.yaw += 0.12; this.world.updateCamera(); }
     else if (k === 'arrowright') { this.world.yaw -= 0.12; this.world.updateCamera(); }
-    else if (k === 'arrowup') { this.world.zoom = THREE.MathUtils.clamp(this.world.zoom - 1.5, 8, 46); this.world.updateCamera(); }
-    else if (k === 'arrowdown') { this.world.zoom = THREE.MathUtils.clamp(this.world.zoom + 1.5, 8, 46); this.world.updateCamera(); }
+    else if (k === 'arrowup') { this.world.zoom = THREE.MathUtils.clamp(this.world.zoom - 1.5, ZOOM_MIN, ZOOM_MAX); this.world.updateCamera(); }
+    else if (k === 'arrowdown') { this.world.zoom = THREE.MathUtils.clamp(this.world.zoom + 1.5, ZOOM_MIN, ZOOM_MAX); this.world.updateCamera(); }
   }
 
   // ---- Touch ------------------------------------------------------------
