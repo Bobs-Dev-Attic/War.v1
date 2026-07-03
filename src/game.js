@@ -50,14 +50,23 @@ export class Game {
   _formation(typeKeys, faction, line, spacing) {
     // Lay a squad out in tidy rows facing the enemy; ranged units sit at the back.
     const order = typeKeys.slice().sort((a, b) => this._rankHint(a) - this._rankHint(b));
-    const perRow = Math.min(6, Math.max(3, Math.ceil(Math.sqrt(order.length) * 1.6)));
+    // Small squads keep the tidy near-square look; large armies grow WIDER
+    // rather than deeper so the back ranks never spill off the field edge
+    // (which would count them as routed the instant they spawn).
+    const MAX_ROWS = 6;
+    const perRow = Math.max(
+      Math.min(6, Math.max(3, Math.ceil(Math.sqrt(order.length) * 1.6))),
+      Math.ceil(order.length / MAX_ROWS),
+    );
+    // Pack rows a touch tighter when the army is deep so it stays in bounds.
+    const rowGap = order.length > 24 ? 1.9 : 2.2;
     const dir = faction === 'roman' ? 1 : -1;
     order.forEach((key, i) => {
       const row = Math.floor(i / perRow);
       const col = i % perRow;
       const rowCount = Math.min(perRow, order.length - row * perRow);
       const x = (col - (rowCount - 1) / 2) * spacing;
-      const z = line + dir * row * 2.2;
+      const z = line + dir * row * rowGap;
       this._add(faction, new THREE.Vector3(x, 0, z), key);
     });
   }
