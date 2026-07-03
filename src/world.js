@@ -63,24 +63,42 @@ export class World {
     this.fill = fill;
   }
 
+  // The battlefield height at a world point. Subtle rolling ground everywhere,
+  // gentled toward the centre so the main clash reads clean. Units sample this
+  // so they walk ON the terrain rather than through it; the ground mesh is
+  // displaced by the same function so the two always agree.
+  heightAt(x, z) {
+    const amp = this.terrainAmp ?? 0.4;
+    const roll =
+      Math.sin(x * 0.075) * Math.cos(z * 0.062) * 0.6 +
+      Math.sin(x * 0.041 + z * 0.055) * 0.4;
+    const d = Math.sqrt(x * x + z * z);
+    const damp = THREE.MathUtils.clamp((d - 6) / 16, 0.32, 1); // calmer near centre
+    return roll * amp * damp;
+  }
+
+  _displaceGround() {
+    const pos = this._groundGeo.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      pos.setY(i, this.heightAt(pos.getX(i), pos.getZ(i)));
+    }
+    pos.needsUpdate = true;
+    this._groundGeo.computeVertexNormals();
+    // Arena disc conforms to the same surface (a hair above, to avoid z-fight).
+    const ap = this._arenaGeo.attributes.position;
+    for (let i = 0; i < ap.count; i++) {
+      ap.setY(i, this.heightAt(ap.getX(i), ap.getZ(i)) + 0.02);
+    }
+    ap.needsUpdate = true;
+    this._arenaGeo.computeVertexNormals();
+  }
+
   _buildTerrain() {
     const size = 100;
-    // Gently undulating ground for a battlefield feel.
-    const geo = new THREE.PlaneGeometry(size, size, 80, 80);
+    // Gently undulating ground for a battlefield feel (displaced in applyEnvironment).
+    const geo = new THREE.PlaneGeometry(size, size, 96, 96);
     geo.rotateX(-Math.PI / 2);
-    const pos = geo.attributes.position;
-    for (let i = 0; i < pos.count; i++) {
-      const x = pos.getX(i);
-      const z = pos.getZ(i);
-      const h =
-        Math.sin(x * 0.12) * Math.cos(z * 0.1) * 0.5 +
-        Math.sin(x * 0.05 + z * 0.07) * 0.7;
-      // Flatten the central arena so units stand level.
-      const d = Math.sqrt(x * x + z * z);
-      const flat = THREE.MathUtils.clamp((d - 12) / 20, 0, 1);
-      pos.setY(i, h * flat);
-    }
-    geo.computeVertexNormals();
+    this._groundGeo = geo;
 
     const mat = new THREE.MeshStandardMaterial({
       color: 0x4a5a34,
@@ -97,12 +115,13 @@ export class World {
     // Battle arena disc — a trampled dirt ring where the clash happens.
     const arenaGeo = new THREE.CircleGeometry(15, 64);
     arenaGeo.rotateX(-Math.PI / 2);
+    this._arenaGeo = arenaGeo;
     const arenaMat = new THREE.MeshStandardMaterial({ color: 0x6b5638, roughness: 1 });
     const arena = new THREE.Mesh(arenaGeo, arenaMat);
-    arena.position.y = 0.02;
     arena.receiveShadow = true;
     this.scene.add(arena);
     this.arena = arena;
+    this._displaceGround();
 
     // Subtle grid to aid RTS spatial reading.
     const grid = new THREE.GridHelper(100, 50, 0x2a3320, 0x24301c);
@@ -115,9 +134,12 @@ export class World {
     // Groups the environment system fills and clears between battles.
     this.envGroup = new THREE.Group();     // terrain features + scenery
     this.weatherGroup = new THREE.Group(); // rain / snow particles
+    this.birdsGroup = new THREE.Group();   // vultures circling overhead
     this.scene.add(this.envGroup);
     this.scene.add(this.weatherGroup);
+    this.scene.add(this.birdsGroup);
     this._weather = null;
+    this._birds = [];
   }
 
   // ---- Environments (settings / weather / time of day) -------------------
@@ -142,8 +164,13 @@ export class World {
     const dark = env.time === 'Night';
     this.grid.material.opacity = dark ? 0.12 : 0.2;
 
+    // Hilly fields roll a touch more; every field stays subtle and walkable.
+    this.terrainAmp = env.features && env.features.hills ? 0.7 : 0.35;
+    this._displaceGround();
+
     this._buildFeatures(env);
     this._buildWeather(env.weather);
+    this._buildBirds(env);
   }
 
   _clearGroup(group) {
@@ -161,8 +188,8 @@ export class World {
     // battlefield keeps a consistent look through rematches.
     let seed = 0; for (const ch of env.label) seed += ch.charCodeAt(0);
     const rnd = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
+    // Hills now live in the ground heightfield; features sit on that surface.
 
-    if (f.hills) this._buildHills(env, rnd);
     if (f.ditch) this._buildDitch(env);
     if (f.stream) this._buildStream(env);
     if (f.bridge && f.stream) this._buildBridge(env);
@@ -170,23 +197,10 @@ export class World {
     if (f.trees) this._buildTrees(env, f.trees, f.treeStyle, rnd);
 
     // Roman standards always flank the legion's line.
-    for (const sx of [-6.5, 6.5]) this.envGroup.add(this._banner(sx, 14.5, 0xd43a3a));
-  }
-
-  _buildHills(env, rnd) {
-    // Low rolling mounds around the outer ring, sunk so only their crowns show.
-    const mat = new THREE.MeshStandardMaterial({ color: env.ground, roughness: 1 });
-    const n = 7;
-    for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2 + rnd() * 0.7;
-      const r = 26 + rnd() * 12;
-      const rad = 6 + rnd() * 7;
-      const geo = new THREE.SphereGeometry(rad, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2);
-      const hill = new THREE.Mesh(geo, mat);
-      hill.scale.y = 0.28 + rnd() * 0.22;
-      hill.position.set(Math.cos(a) * r, -0.4, Math.sin(a) * r);
-      hill.castShadow = true; hill.receiveShadow = true;
-      this.envGroup.add(hill);
+    for (const sx of [-6.5, 6.5]) {
+      const banner = this._banner(sx, 14.5, 0xd43a3a);
+      banner.position.y = this.heightAt(sx, 14.5);
+      this.envGroup.add(banner);
     }
   }
 
@@ -273,7 +287,8 @@ export class World {
       const r = 19 + rnd() * 16;
       const s = 0.4 + rnd() * 1.1;
       const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(s, 0), rockMat);
-      rock.position.set(Math.cos(a) * r, s * 0.35, Math.sin(a) * r);
+      const rx = Math.cos(a) * r, rz = Math.sin(a) * r;
+      rock.position.set(rx, this.heightAt(rx, rz) + s * 0.35, rz);
       rock.rotation.set(rnd() * 3, rnd() * 3, rnd() * 3);
       rock.castShadow = true; rock.receiveShadow = true;
       this.envGroup.add(rock);
@@ -324,7 +339,7 @@ export class World {
       crown2.position.set((rnd() - 0.5) * 1.2, 3.1, (rnd() - 0.5) * 1.2); crown2.castShadow = true; g.add(crown2);
       if (env.features.snowy) crown.material = new THREE.MeshStandardMaterial({ color: 0xdfe8f0, roughness: 1 });
     }
-    g.position.set(x, 0, z);
+    g.position.set(x, this.heightAt(x, z) - 0.1, z);   // roots sunk into the slope
     g.scale.setScalar(scale);
     g.rotation.y = rnd() * Math.PI * 2;
     return g;
@@ -357,8 +372,55 @@ export class World {
     this._weather = { type, pts, n, range, high, speed: isRain ? 46 : 6 };
   }
 
-  // Animate weather + drift the stream surface. Called each frame.
+  // Vultures wheeling high over the battlefield — a grim, restless sky.
+  _buildBirds(env) {
+    this._clearGroup(this.birdsGroup);
+    this._birds = [];
+    const wingCol = env.time === 'Night' ? 0x1a1e28 : 0x1e1a16;
+    const mat = new THREE.MeshStandardMaterial({ color: wingCol, roughness: 1, side: THREE.DoubleSide });
+    const n = 6;
+    for (let i = 0; i < n; i++) {
+      const bird = new THREE.Group();
+      // A simple silhouette: two swept wings meeting at a slim body.
+      for (const side of [-1, 1]) {
+        const wing = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.5), mat);
+        wing.rotation.x = -Math.PI / 2;
+        wing.rotation.z = side * 0.5;
+        wing.position.x = side * 0.75;
+        bird.add(wing);
+      }
+      const body = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.18, 0.9), mat);
+      body.rotation.x = Math.PI / 2; bird.add(body);
+      // Each bird rides its own slow orbit at a wheeling height.
+      const b = {
+        mesh: bird,
+        radius: 16 + (i % 3) * 5,
+        height: 17 + (i % 4) * 2.5,
+        angle: (i / n) * Math.PI * 2,
+        speed: 0.14 + (i % 3) * 0.04,
+        flap: (i / n) * Math.PI * 2,
+        cx: (i % 2 ? 1 : -1) * 4,
+        cz: (i % 3 - 1) * 4,
+      };
+      this._birds.push(b);
+      this.birdsGroup.add(bird);
+    }
+  }
+
+  // Animate weather + drift the stream surface + wheel the vultures. Per frame.
   updateEnvironment(dt) {
+    for (const b of this._birds) {
+      b.angle += b.speed * dt;
+      b.flap += dt * 4;
+      const x = b.cx + Math.cos(b.angle) * b.radius;
+      const z = b.cz + Math.sin(b.angle) * b.radius;
+      b.mesh.position.set(x, b.height + Math.sin(b.angle * 2) * 0.6, z);
+      b.mesh.rotation.y = -b.angle + Math.PI / 2;   // bank into the turn
+      const wl = b.mesh.children;
+      const flap = Math.sin(b.flap) * 0.35;
+      if (wl[0]) wl[0].rotation.z = 0.5 + flap;
+      if (wl[1]) wl[1].rotation.z = -0.5 - flap;
+    }
     const w = this._weather;
     if (w) {
       const arr = w.pts.geometry.attributes.position.array;

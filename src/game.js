@@ -16,6 +16,7 @@ export class Game {
     this.projectiles = [];
     this.gibs = [];              // severed limbs / dropped gear tumbling to ground
     this.blood = [];             // airborne blood droplets
+    this.dust = [];              // dust puffs kicked up as fighters clash
     this.decals = [];            // blood splatter & puddles on the ground
     this.bleeders = [];          // stumps squirting blood over time
     this.hoveredEnemy = null;
@@ -75,7 +76,9 @@ export class Game {
   }
 
   _add(faction, pos, typeKey) {
+    if (this.world.heightAt) pos.y = this.world.heightAt(pos.x, pos.z);
     const u = new Unit(faction, pos, typeKey);
+    u.world = this.world;                    // so the soldier stands on the terrain
     this.units.push(u);
     this.group.add(u.root);
     return u;
@@ -350,6 +353,66 @@ export class Game {
     }
   }
 
+  // Soft round puff texture for dust, cached once.
+  _dustTex() {
+    if (this._dustTexture) return this._dustTexture;
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const g = c.getContext('2d');
+    const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    grad.addColorStop(0, 'rgba(255,255,255,0.9)');
+    grad.addColorStop(0.5, 'rgba(255,255,255,0.35)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 64, 64);
+    this._dustTexture = new THREE.CanvasTexture(c);
+    return this._dustTexture;
+  }
+
+  // Kick up a puff of dust (or snow) where fighters clash — tinted to the field.
+  spawnDust(x, z, count = 5, force = 1) {
+    if (this.dust.length > 220) return;               // keep it cheap in big melees
+    const env = this.world.environment;
+    const tint = new THREE.Color(env ? (env.features && env.features.snowy ? 0xf0f4fa : env.ground) : 0x9a8560);
+    tint.lerp(new THREE.Color(0xffffff), 0.35);       // dust rides lighter than the soil
+    const y0 = this.world.heightAt ? this.world.heightAt(x, z) : 0;
+    for (let i = 0; i < count; i++) {
+      const mat = new THREE.SpriteMaterial({
+        map: this._dustTex(), color: tint, transparent: true,
+        opacity: 0.32 + Math.random() * 0.2, depthWrite: false,
+      });
+      const s = new THREE.Sprite(mat);
+      s.position.set(x + (Math.random() - 0.5) * 0.7, y0 + 0.15 + Math.random() * 0.2, z + (Math.random() - 0.5) * 0.7);
+      const sc = 0.4 + Math.random() * 0.4;
+      s.scale.setScalar(sc);
+      this.group.add(s);
+      this.dust.push({
+        mesh: s,
+        v: new THREE.Vector3((Math.random() - 0.5) * 1.2 * force, 0.5 + Math.random() * 0.7, (Math.random() - 0.5) * 1.2 * force),
+        life: 0.6 + Math.random() * 0.5, age: 0, grow: 1.4 + Math.random(),
+      });
+    }
+  }
+
+  _updateDust(dt) {
+    for (let i = this.dust.length - 1; i >= 0; i--) {
+      const d = this.dust[i];
+      d.age += dt;
+      if (d.age >= d.life) {
+        this.group.remove(d.mesh);
+        d.mesh.material.dispose();
+        this.dust.splice(i, 1);
+        continue;
+      }
+      d.v.y -= dt * 0.6;                    // settle
+      d.v.multiplyScalar(1 - dt * 1.8);     // air drag
+      d.mesh.position.addScaledVector(d.v, dt);
+      const k = d.age / d.life;
+      d.mesh.scale.setScalar(d.mesh.scale.x + d.grow * dt);
+      d.mesh.material.opacity = (0.32 + 0.2) * (1 - k) * (1 - k);
+    }
+  }
+
   // A flat stain on the ground (splatter or a growing puddle).
   spawnDecal(x, z, radius, opacity = 0.9) {
     const mat = new THREE.MeshBasicMaterial({
@@ -500,6 +563,7 @@ export class Game {
     this._resolveCollisions();
     this._updateProjectiles(dt);
     this._updateGore(dt);
+    this._updateDust(dt);
     this._updateEffects(dt);
     this.ui.updateTally(this);
     this.ui.updateStats(this._inspectUnit());
@@ -600,6 +664,7 @@ export class Game {
     this.projectiles = [];
     this.gibs = [];
     this.blood = [];
+    this.dust = [];
     this.decals = [];
     this.bleeders = [];
     this.hoveredEnemy = null;

@@ -34,10 +34,13 @@ time of day, weather** and surrounding **terrain**:
 | 🍂 Autumn Woods | Afternoon | Clear |
 
 The surrounding landscape is dressed with **trees** (broadleaf, snow-capped pine
-or palm to suit the setting), **rolling hills**, a **stream** with a timber
-**plank bridge**, boulders, and **ditches/earthworks** — while the central arena
-stays flat and clear for the fight. Rain and snow fall in real time; the stream
-ripples; the moon lights the night.
+or palm to suit the setting), a **stream** with a timber **plank bridge**,
+boulders, and **ditches/earthworks**. The ground rolls in **subtle hills** and
+soldiers **walk over them** — they stand on the terrain surface, not a flat
+plane — while the central arena stays gentle and clear for the fight. Rain and
+snow fall in real time, the stream ripples, the moon lights the night, and
+**vultures wheel overhead** waiting on the fallen. When fighters clash, **dust
+kicks up** from the churned ground.
 
 ### Formations
 
