@@ -167,33 +167,37 @@ function flinchPose(j, t) {
 // ---- Reach & ranged poses (spear / pike / bow / javelin) -----------------
 // One-handed on the weapon arm, so shield-bearers keep their guard.
 
-// Forward is model-local -z, so a negative chest.position.z lunges the whole
-// torso (and the leveled spear) straight at the foe — a true thrust rather than
-// a chop. The arm holds the spear level throughout so the point never dips.
-function spearThrustPose(j, t) {
+// Forward is model-local -z, so a negative body.position.z lunges the WHOLE
+// figure (torso, hips and legs together) straight at the foe — a true thrust
+// rather than a chop. Driving the body (not just the chest) keeps the torso
+// joined to the hips so the fighter never splits at the waist. The arm holds
+// the spear level throughout so the point never dips.
+function spearThrustPose(j, t, u) {
   const sh = kf(t, [[0, 1.5], [0.3, 1.62], [0.5, 1.6], [0.62, 1.58], [1, 1.5]]);
   const el = kf(t, [[0, 0.08], [0.3, 0.5], [0.5, 0.0], [0.62, 0.0], [1, 0.08]]);
-  const reach = kf(t, [[0, 0], [0.3, 0.18], [0.5, -0.72], [0.62, -0.64], [1, 0]]);
+  let reach = kf(t, [[0, 0], [0.3, 0.18], [0.5, -0.72], [0.62, -0.64], [1, 0]]);
+  if (u && u.mounted) reach *= 0.5;                 // a rider only leans; don't slide off the saddle
   const lunge = kf(t, [[0, 0], [0.3, -0.12], [0.5, 0.6], [0.64, 0.55], [1, 0]]);
   j.rightShoulder.rotation.x = sh;
   j.rightElbow.rotation.x = el;
-  j.chest.position.z = reach;                       // torso drives forward
-  j.chest.rotation.x = -0.04 + Math.min(0, reach) * 0.06; // a hint of lean; spear stays level
+  j.body.position.z = reach;                        // whole body drives forward
+  j.chest.rotation.x = -0.04 + Math.min(0, reach) * 0.12; // lean into the lunge; spear stays level
   j.leftHip.rotation.x = lunge;                     // front foot steps in
   j.leftKnee.rotation.x = -Math.max(0, lunge) * 1.05;
   j.rightHip.rotation.x = -lunge * 0.4;             // rear leg extends
 }
 
-function pikeThrustPose(j, t) {
+function pikeThrustPose(j, t, u) {
   // Braced, measured lunge — a longer wind and a shorter step than the spear.
   const sh = kf(t, [[0, 1.45], [0.35, 1.52], [0.55, 1.46], [0.68, 1.44], [1, 1.45]]);
   const el = kf(t, [[0, 0.08], [0.35, 0.4], [0.55, 0.0], [0.68, 0.0], [1, 0.08]]);
-  const reach = kf(t, [[0, 0], [0.35, 0.14], [0.55, -0.58], [0.68, -0.52], [1, 0]]);
+  let reach = kf(t, [[0, 0], [0.35, 0.14], [0.55, -0.58], [0.68, -0.52], [1, 0]]);
+  if (u && u.mounted) reach *= 0.5;
   const brace = kf(t, [[0, 0], [0.55, 0.4], [0.68, 0.35], [1, 0]]);
   j.rightShoulder.rotation.x = sh;
   j.rightElbow.rotation.x = el;
-  j.chest.position.z = reach;
-  j.chest.rotation.x = -0.08 + Math.min(0, reach) * 0.1;
+  j.body.position.z = reach;                        // whole body drives forward
+  j.chest.rotation.x = -0.08 + Math.min(0, reach) * 0.16;
   j.leftHip.rotation.x = brace * 0.5;
   j.leftKnee.rotation.x = -0.2 - Math.max(0, brace) * 0.5;
   j.rightHip.rotation.x = -brace * 0.3;
