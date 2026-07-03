@@ -53,6 +53,12 @@ export const UNIT_TYPES = {
     stat: { hp: 1.16, dmg: 1.1, block: 0.05, elite: true }, combos: 'roman',
     desc: 'Elite guard — the finest of the legions.',
   },
+  eques: {
+    faction: 'roman', label: 'Eques', role: 'melee', reach: 2.6, points: 3,
+    cfg: { weapon: 'spear', shield: 'parma', helmet: 'romanLight', crest: 0x3a6acf, mounted: true, horse: 0x7a4a28, saddleCloth: 0x8a2a2a },
+    stat: { hp: 1.08, dmg: 1.06, speed: 1.5 }, combos: [['spearThrust'], ['spearThrust', 'spearThrust']],
+    desc: 'Cavalry — swift lancers who ride down stragglers.',
+  },
 
   // ---------------- Horde ----------------
   warrior: {
@@ -92,6 +98,12 @@ export const UNIT_TYPES = {
     stat: { hp: 1.32, dmg: 1.22, toughness: 0.06, speed: 1.05, elite: true },
     combos: [['overhead', 'spin'], ['slash', 'slash', 'overhead'], ['spin', 'overhead']],
     desc: 'War-leader — a towering, brutal champion.',
+  },
+  outrider: {
+    faction: 'barbarian', label: 'Outrider', role: 'melee', reach: 1.95, points: 3,
+    cfg: { weapon: 'axe', shield: 'round', mounted: true, horse: 0x33261a, saddleCloth: 0x5a3a1e, hair: 0x6a3a1e },
+    stat: { hp: 1.05, dmg: 1.08, speed: 1.55 }, combos: 'barbarian',
+    desc: 'Horse raider — fast, hard-hitting riders of the horde.',
   },
 };
 
