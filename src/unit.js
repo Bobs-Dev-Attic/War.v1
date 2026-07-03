@@ -840,6 +840,7 @@ export class Unit {
   _rest() {
     const j = this.j;
     j.body.position.y = 0;
+    j.chest.position.z = 0;               // clear any thrust-lunge offset
     j.chest.rotation.set(0, 0, 0);
     j.head.rotation.set(0, 0, 0);
     j.leftHip.rotation.set(0, 0, 0);

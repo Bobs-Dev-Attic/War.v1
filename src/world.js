@@ -381,19 +381,28 @@ export class World {
     const n = 6;
     for (let i = 0; i < n; i++) {
       const bird = new THREE.Group();
-      // A simple silhouette: two swept wings meeting at a slim body.
+      // Slim body along the line of flight (local +z is forward).
+      const body = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.16, 0.95), mat);
+      bird.add(body);
+      const head = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 0.22), mat);
+      head.position.z = 0.55; bird.add(head);
+      // Each wing hangs off a HINGE PIVOT at the body centreline; the wing mesh
+      // is a flat surface reaching outward from the hinge. Flapping rotates the
+      // pivot about the forward axis, so the tips beat straight up and down.
+      const wings = [];
       for (const side of [-1, 1]) {
-        const wing = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.5), mat);
-        wing.rotation.x = -Math.PI / 2;
-        wing.rotation.z = side * 0.5;
-        wing.position.x = side * 0.75;
-        bird.add(wing);
+        const pivot = new THREE.Group();
+        const wing = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.55), mat);
+        wing.rotation.x = -Math.PI / 2;      // lie flat (horizontal surface)
+        wing.rotation.z = -side * 0.14;      // slight sweep-back at the tip
+        wing.position.set(side * 0.7, 0, -0.05); // inner edge at hinge, reaches out
+        pivot.add(wing);
+        bird.add(pivot);
+        wings.push({ pivot, side });
       }
-      const body = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.18, 0.9), mat);
-      body.rotation.x = Math.PI / 2; bird.add(body);
       // Each bird rides its own slow orbit at a wheeling height.
       const b = {
-        mesh: bird,
+        mesh: bird, wings,
         radius: 16 + (i % 3) * 5,
         height: 17 + (i % 4) * 2.5,
         angle: (i / n) * Math.PI * 2,
@@ -415,14 +424,12 @@ export class World {
       const x = b.cx + Math.cos(b.angle) * b.radius;
       const z = b.cz + Math.sin(b.angle) * b.radius;
       b.mesh.position.set(x, b.height + Math.sin(b.angle * 2) * 0.6, z);
-      b.mesh.rotation.y = -b.angle + Math.PI / 2;   // bank into the turn
-      const wl = b.mesh.children;
-      // Wings raise and lower together in a natural upstroke/downstroke. Signs
-      // match the build dihedral (left wing negative, right positive) so the
-      // beat folds the right way rather than inverting the wings.
-      const a = 0.5 + Math.sin(b.flap) * 0.5;
-      if (wl[0]) wl[0].rotation.z = -a;   // left wing (built at side -1)
-      if (wl[1]) wl[1].rotation.z = a;    // right wing (built at side +1)
+      b.mesh.rotation.y = -b.angle + Math.PI / 2;   // face the line of flight
+      // Beat the wings up and down together: the hinge rotates about the bird's
+      // forward axis, so a positive angle lifts each tip. Both wings share the
+      // same phase, giving a clean upstroke/downstroke rather than a roll.
+      const f = Math.sin(b.flap) * 0.7;
+      for (const w of b.wings) w.pivot.rotation.z = w.side * f;
     }
     const w = this._weather;
     if (w) {
