@@ -1,8 +1,10 @@
 import { ATTRS, ATTR_LABELS } from './attributes.js';
 import { UNIT_TYPES, ROMAN_TYPES, BARBARIAN_TYPES, armyCount } from './unitTypes.js';
 
-const MAX_PER_TYPE = 8;
-const MAX_PER_SIDE = 12;
+// The engine handles large armies comfortably (collision/AI are cheap and the
+// formation packs deep armies inside the field), so these caps are generous.
+const MAX_PER_TYPE = 20;
+const MAX_PER_SIDE = 40;
 
 // Thin controller over the HUD DOM: tallies, selection info, command feedback,
 // the soldier dossier, the battle-setup screen and the victory/defeat banner.
