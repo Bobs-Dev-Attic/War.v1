@@ -167,31 +167,36 @@ function flinchPose(j, t) {
 // ---- Reach & ranged poses (spear / pike / bow / javelin) -----------------
 // One-handed on the weapon arm, so shield-bearers keep their guard.
 
+// Forward is model-local -z, so a negative chest.position.z lunges the whole
+// torso (and the leveled spear) straight at the foe — a true thrust rather than
+// a chop. The arm holds the spear level throughout so the point never dips.
 function spearThrustPose(j, t) {
-  // In-line spear: the arm stays level (~1.4) so the point holds on the foe;
-  // it cocks back, then drives forward with a body lunge for a stabbing jab.
-  const sh = kf(t, [[0, 1.4], [0.28, 1.55], [0.5, 1.12], [0.62, 1.08], [1, 1.4]]);
-  const el = kf(t, [[0, 0.1], [0.28, 0.6], [0.5, 0.04], [0.62, 0.0], [1, 0.1]]);
-  const lunge = kf(t, [[0, 0], [0.5, 0.55], [0.64, 0.5], [1, 0]]);
+  const sh = kf(t, [[0, 1.5], [0.3, 1.62], [0.5, 1.6], [0.62, 1.58], [1, 1.5]]);
+  const el = kf(t, [[0, 0.08], [0.3, 0.5], [0.5, 0.0], [0.62, 0.0], [1, 0.08]]);
+  const reach = kf(t, [[0, 0], [0.3, 0.18], [0.5, -0.72], [0.62, -0.64], [1, 0]]);
+  const lunge = kf(t, [[0, 0], [0.3, -0.12], [0.5, 0.6], [0.64, 0.55], [1, 0]]);
   j.rightShoulder.rotation.x = sh;
   j.rightElbow.rotation.x = el;
-  j.chest.rotation.x = -0.14 * Math.sin(t * Math.PI);
-  j.leftHip.rotation.x = lunge;
+  j.chest.position.z = reach;                       // torso drives forward
+  j.chest.rotation.x = -0.04 + Math.min(0, reach) * 0.06; // a hint of lean; spear stays level
+  j.leftHip.rotation.x = lunge;                     // front foot steps in
   j.leftKnee.rotation.x = -Math.max(0, lunge) * 1.05;
-  j.rightHip.rotation.x = -lunge * 0.4;
+  j.rightHip.rotation.x = -lunge * 0.4;             // rear leg extends
 }
 
 function pikeThrustPose(j, t) {
-  // Braced, measured lunge — the long shaft (held level) does the reaching.
-  const sh = kf(t, [[0, 1.35], [0.35, 1.5], [0.55, 1.12], [0.68, 1.08], [1, 1.35]]);
-  const el = kf(t, [[0, 0.1], [0.35, 0.45], [0.55, 0.02], [0.68, 0.0], [1, 0.1]]);
-  const brace = kf(t, [[0, 0], [0.5, 0.35], [0.66, 0.3], [1, 0]]);
+  // Braced, measured lunge — a longer wind and a shorter step than the spear.
+  const sh = kf(t, [[0, 1.45], [0.35, 1.52], [0.55, 1.46], [0.68, 1.44], [1, 1.45]]);
+  const el = kf(t, [[0, 0.08], [0.35, 0.4], [0.55, 0.0], [0.68, 0.0], [1, 0.08]]);
+  const reach = kf(t, [[0, 0], [0.35, 0.14], [0.55, -0.58], [0.68, -0.52], [1, 0]]);
+  const brace = kf(t, [[0, 0], [0.55, 0.4], [0.68, 0.35], [1, 0]]);
   j.rightShoulder.rotation.x = sh;
   j.rightElbow.rotation.x = el;
-  j.leftHip.rotation.x = brace * 0.4;
-  j.leftKnee.rotation.x = -0.2;
-  j.rightKnee.rotation.x = -0.26;
-  j.chest.rotation.x = -0.1;
+  j.chest.position.z = reach;
+  j.chest.rotation.x = -0.08 + Math.min(0, reach) * 0.1;
+  j.leftHip.rotation.x = brace * 0.5;
+  j.leftKnee.rotation.x = -0.2 - Math.max(0, brace) * 0.5;
+  j.rightHip.rotation.x = -brace * 0.3;
 }
 
 function shootPose(j, t) {
