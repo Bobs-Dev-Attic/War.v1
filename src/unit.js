@@ -76,6 +76,11 @@ export class Unit {
     this.attackCooldown = 0;
     this.hasShield = type.cfg.shield != null; // archers/berserkers carry none
 
+    // Body integrity — parts can be hacked off.
+    this.parts = { head: true, leftArm: true, rightArm: true, leftLeg: true, rightLeg: true };
+    this.crawling = false;
+    this.disarmed = false;
+
     // Combat move/combo state.
     this.move = null;                        // { def, name, t, hitDone } while a move plays
     this.combo = null;                       // queued attack sequence
@@ -148,12 +153,12 @@ export class Unit {
   }
 
   // ---- Combat ------------------------------------------------------------
-  applyDamage(amount, fromDir, stagger = false) {
+  applyDamage(amount, fromDir, stagger = false, game) {
     if (!this.alive || this.hasSurrendered) return;
     this.hp -= amount;
     if (this.hp <= 0) {
       this.hp = 0;
-      this._die(fromDir);
+      this._die(fromDir, game);
       return;
     }
     // Flinch if we weren't mid-move; a stagger interrupts anything we were doing.
@@ -163,7 +168,7 @@ export class Unit {
     }
   }
 
-  _die(fromDir) {
+  _die(fromDir, game) {
     this.alive = false;
     this.state = 'dead';
     this.move = null;
@@ -174,6 +179,98 @@ export class Unit {
     this._deathDir = fromDir ? Math.sign(fromDir) : (Math.random() < 0.5 ? 1 : -1);
     this.healthBar.visible = false;
     this.selectionRing.visible = false;
+    if (game) {
+      // Drop weapon and shield, and bleed out where you fall.
+      this._dropWeapon(game);
+      this._dropShield(game);
+      this._v.set(this.position.x, 1.1, this.position.z);
+      game.spawnBlood(this._v, { x: this._deathDir, z: 0 }, 16, 1.3);
+      game.spawnDecal(this.position.x, this.position.z, 0.55, 0.85);
+    }
+  }
+
+  // ---- Dismemberment -----------------------------------------------------
+  // Hack off a body part: it flies off as a gib, leaves a bleeding stump, and
+  // changes how the soldier can fight.
+  sever(part, game, dir = 1) {
+    if (!this.parts[part]) return;
+    this.parts[part] = false;
+    const MAP = {
+      head: { joint: 'head', refs: ['head'] },
+      leftArm: { joint: 'leftShoulder', refs: ['leftShoulder', 'leftElbow', 'leftHand'] },
+      rightArm: { joint: 'rightShoulder', refs: ['rightShoulder', 'rightElbow', 'rightHand'] },
+      leftLeg: { joint: 'leftHip', refs: ['leftHip', 'leftKnee'] },
+      rightLeg: { joint: 'rightHip', refs: ['rightHip', 'rightKnee'] },
+    };
+    const info = MAP[part];
+    const obj = this.j[info.joint];
+    if (!obj || !obj.parent) return;
+    const parent = obj.parent;
+    const localPos = obj.position.clone();
+    const wound = new THREE.Vector3();
+    obj.getWorldPosition(wound);
+    // Cap the raw socket with a dark stump.
+    const cap = new THREE.Mesh(
+      new THREE.SphereGeometry(part === 'head' ? 0.11 : 0.1, 8, 6),
+      new THREE.MeshStandardMaterial({ color: 0x6e0a0a, roughness: 0.6 })
+    );
+    cap.position.copy(localPos);
+    parent.add(cap);
+    // Fling the limb off as a gib.
+    const vel = new THREE.Vector3(dir * (1 + Math.random() * 2.2), 2.5 + Math.random() * 2, (Math.random() - 0.5) * 2);
+    const spin = new THREE.Vector3((Math.random() - 0.5) * 9, (Math.random() - 0.5) * 9, (Math.random() - 0.5) * 9);
+    game.addGib(obj, vel, spin);
+    // Swap the now-detached joints for throwaway dummies so animation code can't
+    // move the gib on the ground.
+    for (const n of info.refs) this.j[n] = new THREE.Object3D();
+    // Gush of blood + a bleeding stump.
+    game.spawnBlood(wound, { x: dir, z: 0 }, 26, 1.7);
+    game.addBleeder(this, this.root.worldToLocal(wound.clone()), 3.5);
+    // Consequences.
+    if (part === 'head') { if (this.alive) this._die(dir, game); }
+    else if (part === 'leftLeg' || part === 'rightLeg') { this._fallAndCrawl(); }
+    else if (part === 'rightArm') { this.disarmed = true; this.move = null; this.combo = null; }
+    else if (part === 'leftArm') { this.hasShield = false; }
+  }
+
+  // On a strong or killing blow, chance to lop off a limb.
+  _severRandom(killing, attacker, game) {
+    const dir = Math.sign(this.position.x - attacker.position.x) || 1;
+    const opts = [];
+    if (this.parts.rightArm) opts.push('rightArm');
+    if (this.parts.leftArm) opts.push('leftArm');
+    if (this.parts.leftLeg) opts.push('leftLeg');
+    if (this.parts.rightLeg) opts.push('rightLeg');
+    if (killing && this.parts.head) opts.push('head', 'head');   // decapitations on kills
+    if (!opts.length) return;
+    this.sever(opts[Math.floor(Math.random() * opts.length)], game, dir);
+  }
+
+  _fallAndCrawl() {
+    if (this.crawling) return;
+    this.crawling = true;
+    this.speed *= 0.35;
+    this.move = null;
+    this.combo = null;
+  }
+
+  _dropWeapon(game) {
+    if (!this.parts.rightArm || this._weaponDropped) return;
+    const weapon = this.j.rightHand.children.find((c) => c.type === 'Group');
+    if (!weapon) return;
+    this._weaponDropped = true;
+    game.addGib(weapon, new THREE.Vector3((Math.random() - 0.5) * 2, 1.6, (Math.random() - 0.5) * 2),
+      new THREE.Vector3(2, 3, 1));
+  }
+
+  _dropShield(game) {
+    if (!this.hasShield || this._shieldDropped) return;
+    const shield = this.j.leftHand.children.find((c) => c.type === 'Group');
+    if (!shield) return;
+    this._shieldDropped = true;
+    this.hasShield = false;
+    game.addGib(shield, new THREE.Vector3((Math.random() - 0.5) * 2, 1.4, (Math.random() - 0.5) * 2),
+      new THREE.Vector3(3, 1, 2));
   }
 
   surrender() {
@@ -199,12 +296,29 @@ export class Unit {
     if (this.state === 'dead') { this._animateDeath(dt); this._billboard(game); return; }
     if (this.hasSurrendered) { this._animateSurrender(dt, game); this._billboard(game); return; }
     if (this.celebrating) { this._animateCelebrate(dt); this._clampToField(); this._billboard(game); return; }
+    if (this.crawling) { this._crawlUpdate(dt, game); return; }
 
     if (this.attackCooldown > 0) this.attackCooldown -= dt;
     if (this.rangedCooldown > 0) this.rangedCooldown -= dt;
     if (this.shoveCooldown > 0) this.shoveCooldown -= dt;
     // Shield-bearers told to Stand Ground brace defensively.
-    this.defensive = this.order === 'hold' && this.hasShield;
+    this.defensive = this.order === 'hold' && this.hasShield && !this.disarmed;
+
+    // A disarmed soldier (weapon arm gone) can't fight — they break and flee.
+    if (this.disarmed) {
+      const foe = game.nearestEnemy(this);
+      if (foe) {
+        const ax = this.position.x - foe.position.x;
+        const az = this.position.z - foe.position.z;
+        const len = Math.hypot(ax, az) || 1;
+        this._v.set(this.position.x + (ax / len) * 4, 0, this.position.z + (az / len) * 4);
+        this._moveToward(this._v, dt, 'run');
+      } else {
+        this._enterIdle(dt);
+      }
+      this._finishFrame(game);
+      return;
+    }
 
     // --- Combat action layer: a committed move (attack/defense/flinch) plays out.
     if (this.move) { this._advanceMove(dt, game); this._finishFrame(game); return; }
@@ -343,6 +457,43 @@ export class Unit {
     this._billboard(game);
   }
 
+  // A soldier who lost a leg drags themselves along the ground in agony.
+  _crawlUpdate(dt, game) {
+    const target = game.nearestEnemy(this);
+    if (target) {
+      const dx = target.position.x - this.position.x;
+      const dz = target.position.z - this.position.z;
+      const dist = Math.hypot(dx, dz);
+      this._desiredFacing = Math.atan2(dx, dz);
+      this._turn(dt);
+      if (dist > 0.9) {
+        const inv = 1 / (dist || 1);
+        this.position.x += dx * inv * this.speed * dt;
+        this.position.z += dz * inv * this.speed * dt;
+      }
+    }
+    this.stride += dt * 4;
+    this.state = 'crawl';
+    this._animateCrawl();
+    this._clampToField();
+    this._updateHealthBar();
+    this._billboard(game);
+  }
+
+  _animateCrawl() {
+    this._rest();
+    const t = this.stride;
+    // Dragged low, torso pitched toward the dirt, head straining up.
+    this.j.body.position.y = -0.55;
+    this.j.chest.rotation.x = -1.0;
+    this.j.head.rotation.x = -0.35;
+    // Remaining leg pushes off; arms claw forward in alternation.
+    if (this.parts.leftLeg) { this.j.leftHip.rotation.x = 0.3 + Math.sin(t) * 0.4; this.j.leftKnee.rotation.x = -0.9; }
+    if (this.parts.rightLeg) { this.j.rightHip.rotation.x = 0.3 + Math.sin(t + Math.PI) * 0.4; this.j.rightKnee.rotation.x = -0.9; }
+    if (this.parts.leftArm) { this.j.leftShoulder.rotation.set(1.5 + Math.sin(t) * 0.5, 0, 0); this.j.leftElbow.rotation.x = 0.4; }
+    if (this.parts.rightArm) { this.j.rightShoulder.rotation.set(1.5 + Math.sin(t + Math.PI) * 0.5, 0, 0); this.j.rightElbow.rotation.x = 0.4; }
+  }
+
   _currentTarget(game) {
     if (this._comboTarget && this._comboTarget.alive && !this._comboTarget.hasSurrendered) {
       return this._comboTarget;
@@ -432,8 +583,12 @@ export class Unit {
       let dmg = this.stats.dmg * (m.dmgMul || 1) * (crit ? 1.9 : 1) * (1 - tgt.stats.toughness);
       dmg *= 0.9 + Math.random() * 0.2;
       const dir = Math.sign(tgt.position.x - this.position.x) || 1;
-      tgt.applyDamage(dmg, -dir, m.stagger);
+      const wasAlive = tgt.alive;
+      tgt.applyDamage(dmg, -dir, m.stagger, game);
       game.spawnHitSpark(tgt.position, this.faction, crit);
+      // Blood on every wound.
+      this._v.set(tgt.position.x, 1.1 + Math.random() * 0.4, tgt.position.z);
+      game.spawnBlood(this._v, { x: -dir, z: 0 }, crit ? 12 : 6, crit ? 1.2 : 0.8);
       game.floatingText(
         tgt.position,
         crit ? `CRIT ${Math.round(dmg)}` : `${Math.round(dmg)}`,
@@ -441,6 +596,11 @@ export class Unit {
         crit ? 1.35 : 1
       );
       if (m.stagger) tgt._knockback(this, m.shove ? 0.85 : 0.3);
+      // Chance to hack off a limb — higher on crits, heavy blows and kills.
+      const killing = wasAlive && !tgt.alive;
+      let sever = (crit ? 0.16 : 0.04) + (m.heavy ? 0.1 : 0) + (killing ? 0.4 : 0);
+      if (tgt.hasSurrendered) sever = 0;
+      if (Math.random() < sever) tgt._severRandom(killing, this, game);
     }
   }
 
@@ -466,7 +626,7 @@ export class Unit {
         this.hp = Math.max(0, this.hp - chip);
         game.spawnHitSpark(this.position, this.faction, false);
         game.floatingText(this.position, 'block', 0xdedede, 0.85);
-        if (this.hp <= 0) this._die(0);
+        if (this.hp <= 0) this._die(0, game);
         return 'block';
       }
     }
@@ -487,10 +647,14 @@ export class Unit {
     }
     const finalDmg = dmg * (1 - this.stats.toughness) * (0.9 + Math.random() * 0.2);
     const dir = Math.sign(this.position.x - shooter.position.x) || 1;
-    this.applyDamage(finalDmg, dir);
+    const wasAlive = this.alive;
+    this.applyDamage(finalDmg, dir, false, game);
     game.spawnHitSpark(this.position, shooter.faction, false);
+    this._v.set(this.position.x, 1.2, this.position.z);
+    game.spawnBlood(this._v, { x: dir, z: 0 }, 6, 0.8);
     game.floatingText(this.position, `${Math.round(finalDmg)}`,
       shooter.faction === 'roman' ? 0xffe0a0 : 0xff9a70, 1);
+    if (wasAlive && !this.alive && Math.random() < 0.3) this._severRandom(true, shooter, game);
   }
 
   _interruptWith(name, attacker) {
