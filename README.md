@@ -11,6 +11,10 @@ dodges — while holding real weapons and shields.
 
 ## Gameplay
 
+The game opens on a **title screen** (showing the current version) with a single
+**Prepare for Battle** button that takes you straight into the battle planner —
+no battle is fought until you muster one.
+
 You control the **Roman soldiers**; the **barbarian horde** charges automatically.
 Use the **top menu → New Battle** to open the **tabbed battle planner**, or
 **Rematch** to refight the same armies. When a battle ends you can **close the
