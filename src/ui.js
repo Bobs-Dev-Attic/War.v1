@@ -563,7 +563,7 @@ export class UI {
         <span>❤ ${s.maxHp} HP</span><span>⚔ ${s.dmg.toFixed(0)} dmg</span>
         <span>🎯 ${Math.round(s.accuracy * 100)}% acc</span><span>💨 ${Math.round(s.dodge * 100)}% dodge</span>
         <span>⛨ ${Math.round(s.block * 100)}% block</span><span>🛡 ${Math.round(s.toughness * 100)}% tough</span>
-        <span>✷ ${Math.round(s.crit * 100)}% crit</span>
+        <span>✷ ${Math.round(s.crit * 100)}% crit</span><span>⚖ ${Math.round(s.balance * 100)}% balance</span>
       </div>`;
       this.stats.className = `show ${side}`;
       this.stats.innerHTML =

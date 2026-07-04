@@ -80,6 +80,10 @@ export function deriveStats(a) {
     block: clamp(0.18 + a.dex * 0.011 + a.exp * 0.026 + a.con * 0.005, 0, 0.5),
     // Fraction of incoming damage shrugged off.
     toughness: clamp(a.con * 0.004 + a.exp * 0.006, 0, 0.5),
+    // Footing: how well you keep your feet (resist being knocked flat) and how
+    // quickly you scramble back up. Sturdy, strong, nimble veterans stay upright —
+    // but a warhorse at the gallop still bowls most men over.
+    balance: clamp(0.1 + a.con * 0.012 + a.str * 0.008 + a.spd * 0.01 + a.exp * 0.012, 0.05, 0.72),
     build: (a.str + a.con) / 2, // used for subtle per-soldier body scale
   };
 }

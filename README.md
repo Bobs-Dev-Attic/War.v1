@@ -110,8 +110,13 @@ a wrecked engine bursts into dust and splinters):
 and wheel away. A mount at full
 health moves **at least twice as fast** as the quickest foot soldier and carries a
 bigger reach, at a higher point cost. A warhorse is its
-own creature: it has its own health and a heavy footprint that **tramples** lighter
-infantry aside, it **rears** to strike foes ahead and **kicks** out at those behind
+own creature: it has its own health and a heavy footprint that shoulders lighter
+infantry aside. Closing on the enemy, a horseman may break into a **run-through
+charge** and **ride a foe clean down** — heavy damage that knocks the victim
+**flat on their back** (they lie there, then scramble up) and jars the mount and
+rider too. Whether a trampled man **keeps his feet or is bowled over** — and how
+fast he **gets back up** — turns on his **balance** and remaining **stamina**. A
+mount also **rears** to strike foes ahead and **kicks** out at those behind
 (staggering, high-damage hoof blows), and it **bounds over** obstacles mid-gallop.
 Horses **can be killed** — most of a blow aimed at a rider lands on the mount — and
 their **legs or head can be hacked off**, which cripples the horse and **throws the
