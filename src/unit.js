@@ -102,6 +102,8 @@ export class Unit {
       this.jumpT = -1;                    // -1 = grounded; ≥0 = in the air
       this.jumpY = 0;
       this.jumpCd = Math.random() * 3;
+      this.charging = null;               // { t, dir } during a run-through charge
+      this._chargeCd = Math.random() * 2;
     }
     this.root.position.copy(position);
     // Subtle per-soldier build: the burly stand a touch taller and broader;
@@ -128,6 +130,11 @@ export class Unit {
     this.crawling = false;
     this.disarmed = false;
     this._inWall = 0;                        // holding allies packed in alongside (shield-wall strength)
+    // Knocked flat (e.g. ridden down by a charge) — prone, then scrambles up.
+    this.knockedDown = false;
+    this.downT = 0;
+    this.getUpTime = 1.4;
+    this._trampleCd = 0;                     // gap between one mount's trample hits
 
     // Combat move/combo state.
     this.move = null;                        // { def, name, t, hitDone } while a move plays
@@ -455,10 +462,13 @@ export class Unit {
 
   // ---- Per-frame update --------------------------------------------------
   update(dt, game) {
+    this._game = game;                       // current-frame ref for movement-time helpers (trample)
     if (this.state === 'dead') { this._animateDeath(dt); this._billboard(game); return; }
     if (this.hasSurrendered) { this._animateSurrender(dt, game); this._billboard(game); return; }
     if (this.celebrating) { this._animateCelebrate(dt); this._clampToField(); this._billboard(game); return; }
+    if (this.knockedDown) { this._knockdownUpdate(dt, game); return; }
     if (this.crawling) { this._crawlUpdate(dt, game); return; }
+    if (this._trampleCd > 0) this._trampleCd -= dt;
 
     // A soldier who routs to the very edge of the battlefield has fled the
     // fight for good — count them among the dead. Retreat orders halt at
@@ -472,9 +482,13 @@ export class Unit {
     if (this.rangedCooldown > 0) this.rangedCooldown -= dt;
     if (this.shoveCooldown > 0) this.shoveCooldown -= dt;
     if (this.mounted && this.horseAlive && this.horseAttackCd > 0) this.horseAttackCd -= dt;
+    if (this.mounted && this._chargeCd > 0) this._chargeCd -= dt;
     // Shield-bearers told to Stand Ground brace defensively.
     this.defensive = this.order === 'hold' && this.hasShield && !this.disarmed;
     if (this.order !== 'hold') this._inWall = 0;
+
+    // Mid charge-through — drive straight on, riding down whatever's in the way.
+    if (this.charging) { this._advanceCharge(dt, game); this._finishFrame(game); return; }
 
     // Siege engines are emplaced artillery — they hold their ground, traverse to
     // aim, and loose heavy shots. No marching, no melee.
@@ -560,6 +574,15 @@ export class Unit {
 
   _meleeUpdate(dt, game, target, dist) {
     this._faceTarget(target, dt);
+    // Some horsemen, closing on the enemy, break into a run-through charge — riding
+    // the foe down rather than pulling up to trade blows. Needs room, wind and a
+    // fresh charge (off cooldown).
+    if (this.mounted && this.horseAlive && !this.charging && this._chargeCd <= 0 &&
+        this.order !== 'hold' && this.stamina > 0.35 && dist > 1.2 && dist < this.range + 6 &&
+        Math.random() < 0.04) {
+      this._startTrampleCharge(target);
+      return;
+    }
     if (dist > this.range) {
       if (this.order === 'hold' && dist > this.range + 0.4) {
         this._holdFormUp(dt, game);           // Stand Ground: close ranks into a shield wall
@@ -945,6 +968,8 @@ export class Unit {
 
   // Decide how this unit reacts to an incoming blow: 'dodge' | 'block' | 'hit'.
   _defend(attacker, m, game) {
+    // Flat on the ground — no dodge, no block, wide open.
+    if (this.knockedDown) return 'hit';
     // Committed to your own swing — no free reactions, trade blows.
     if (this.move && this.move.def.type === 'attack') return 'hit';
     // Holding the line with a shield up = actively defending: much better reads.
@@ -1058,6 +1083,10 @@ export class Unit {
     const speedMul = gait === 'run' ? 1 : 0.5;
     const step = Math.min(this._moveSpeed() * speedMul * dt, dist);
     this.position.addScaledVector(d, step);
+    // A galloping mount rides down any foe caught in its path.
+    if (this.mounted && this.horseAlive && gait === 'run' && dt > 0 && this._game) {
+      this._tryTrample(this._game, d, step / dt);
+    }
     // Sustained running is tiring; a walk costs far less. Sprinting drains a
     // fresh soldier in roughly half a minute of steady charging.
     this.stamina = clamp(this.stamina - dt * (gait === 'run' ? 0.045 : 0.012), 0.12, 1);
@@ -1309,6 +1338,130 @@ export class Unit {
     if (leg) { leg.hip.rotation.x = -0.7 * a; leg.knee.rotation.x = -0.6 * a - 0.05; }
     this._pranceT += dt * 1.6;
     if (this._pranceT >= 1) { this._pranceT = -1; this.pranceCd = 3 + Math.random() * 4; }
+  }
+
+  // ---- Charge-through: barrel forward, riding down anyone in the path ----
+  _startTrampleCharge(target) {
+    const dx = target.position.x - this.position.x;
+    const dz = target.position.z - this.position.z;
+    const len = Math.hypot(dx, dz) || 1;
+    this.charging = { t: 0, dir: { x: dx / len, z: dz / len } };
+    this._desiredFacing = Math.atan2(dx, dz);
+    this._applyFacing();
+  }
+
+  _advanceCharge(dt, game) {
+    const c = this.charging;
+    c.t += dt;
+    // Drive on past the point of contact so the mount runs clean through.
+    this._v.set(this.position.x + c.dir.x * 6, 0, this.position.z + c.dir.z * 6);
+    this._moveToward(this._v, dt, 'run');    // gallops, trampling foes in the path
+    if (c.t >= 0.65) {
+      this.charging = null;
+      this._chargeCd = 3.5 + Math.random() * 3;
+      this.attackCooldown = 0.3 + Math.random() * 0.3;
+    }
+  }
+
+  // ---- Trample: a charging mount rides a foe down ------------------------
+  _tryTrample(game, dir, speed) {
+    if (this._trampleCd > 0 || speed < 4) return;      // only at a real gallop
+    for (const foe of game.units) {
+      if (foe.faction === this.faction || !foe.alive || foe.hasSurrendered) continue;
+      if (foe.mounted || foe.siege || foe.knockedDown) continue;  // can't run down a rider/engine/already-flat
+      const dx = foe.position.x - this.position.x;
+      const dz = foe.position.z - this.position.z;
+      const reach = this.radius + foe.radius + 0.55;
+      if (dx * dx + dz * dz > reach * reach) continue;
+      const dl = Math.hypot(dx, dz) || 1;
+      if ((dx / dl) * dir.x + (dz / dl) * dir.z < 0.25) continue; // only foes ahead in the charge line
+      this._trample(foe, dir, speed, game);
+      this._trampleCd = 0.45;
+      return;                                           // one body per stride
+    }
+  }
+
+  _trample(foe, dir, speed, game) {
+    const kdir = Math.sign(dir.x) || 1;
+    // Bowling a body over hurts — damage scales with charge speed.
+    const impact = 0.7 + speed * 0.13;
+    const dmg = this.stats.dmg * 1.15 * impact * (1 - foe.stats.toughness);
+    const wasAlive = foe.alive;
+    foe.applyDamage(dmg, -kdir, true, game);
+    foe._takeTrample(this, dir, game);
+    this._v.set(foe.position.x, 1.0 + Math.random() * 0.3, foe.position.z);
+    game.spawnBlood(this._v, { x: dir.x, z: dir.z }, 11, 1.3);
+    game.spawnDust(foe.position.x, foe.position.z, 8, 1.5);
+    game.floatingText(foe.position, `${Math.round(dmg)}`, 0xffcaa0, 1.25);
+    if (wasAlive && !foe.alive && Math.random() < 0.5) foe._severRandom(true, this, game);
+    // The collision jars the mount too — a jolt of self-damage and lost wind.
+    this.stamina = clamp(this.stamina - 0.06, 0.1, 1);
+    const selfDmg = 1.5 + Math.random() * 2.5;
+    if (this.horseAlive) {
+      this.horseHp -= selfDmg;
+      if (this.horseHp <= 0) { this.horseHp = 0; this._horseDown(-kdir, game); }
+    } else {
+      this.applyDamage(selfDmg * 0.5, -kdir, false, game);
+    }
+  }
+
+  // Ridden down: shoved along the charge and — unless footing (balance + stamina)
+  // holds — knocked flat.
+  _takeTrample(rider, dir, game) {
+    if (!this.alive || this.hasSurrendered || this.knockedDown) return;
+    const keepFeet = clamp(this.stats.balance * (0.45 + 0.55 * this.stamina), 0, 0.9);
+    if (Math.random() < keepFeet) {
+      this.position.x += dir.x * 0.6; this.position.z += dir.z * 0.6;   // staggered, stays up
+      this.stamina = clamp(this.stamina - 0.06, 0.05, 1);
+      if (!this.move || this.move.def.type !== 'attack') this._startMove('flinch');
+    } else {
+      this.position.x += dir.x * 0.95; this.position.z += dir.z * 0.95;
+      this._knockDown(dir, game);
+    }
+  }
+
+  // ---- Knockdown: flat on your back, then scramble up --------------------
+  _knockDown(dir, game) {
+    if (!this.alive || this.hasSurrendered || this.knockedDown || this.crawling) return;
+    this.knockedDown = true;
+    this.state = 'down';
+    this.move = null; this.combo = null; this.comboGap = 0;
+    this.downT = 0;
+    this._downDir = Math.sign(dir.x) || (Math.random() < 0.5 ? 1 : -1);
+    // Low balance + low stamina = longer flat on your back before you can rise.
+    this.getUpTime = clamp(1.9 - this.stats.balance * 0.9 - this.stamina * 0.5, 0.7, 2.1);
+    this.stamina = clamp(this.stamina - 0.12, 0.05, 1);
+    if (game) game.floatingText(this.position, 'DOWN!', 0xffd24f, 1.1);
+  }
+
+  _knockdownUpdate(dt, game) {
+    this.downT += dt;
+    this._animateKnockdown(Math.min(1, this.downT / this.getUpTime));
+    this._clampToField();
+    this._updateHealthBar();
+    this._billboard(game);
+    if (this.downT >= this.getUpTime) {
+      this.knockedDown = false;
+      this.root.rotation.x = 0;
+      this.state = 'idle';
+      this.attackCooldown = 0.25 + Math.random() * 0.25;
+    }
+  }
+
+  _animateKnockdown(p) {
+    this._rest();
+    // Slam flat, lie there, then rock back upright by the end.
+    const lie = p < 0.22 ? p / 0.22 : (p > 0.7 ? Math.max(0, 1 - (p - 0.7) / 0.3) : 1);
+    this.root.rotation.x = this._downDir * lie * (Math.PI / 2 - 0.12);
+    this.j.body.position.y = -lie * 0.15;
+    this.j.chest.rotation.x = 0.25 * lie;
+    this.j.head.rotation.x = -0.3 * lie;
+    this.j.leftHip.rotation.x = 0.5 * lie; this.j.leftKnee.rotation.x = -0.9 * lie;
+    this.j.rightHip.rotation.x = 0.3 * lie; this.j.rightKnee.rotation.x = -0.6 * lie;
+    // Arms flail on the way down, then push off the ground on the way up.
+    const rise = p > 0.6 ? (p - 0.6) / 0.4 : 0;
+    this.j.leftShoulder.rotation.x = 1.2 * lie - rise * 0.5;
+    this.j.rightShoulder.rotation.x = 0.9 * lie - rise * 0.35;
   }
 
   // Pose the weapon arm (and, for two-handed weapons and bows, the off arm) into
