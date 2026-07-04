@@ -316,6 +316,8 @@ body.title #topbar, body.title #commands, body.title #selection-info { display: 
   background: rgba(226,214,186,.96); border: 1px solid rgba(217,180,90,.55); border-radius: 6px; padding: 6px 7px;
 }
 .md-select option { color: #241a0e; background: #e7dcc4; }
+.md-select optgroup { color: #4a3a1a; background: #d9cba6; font-weight: 800; font-style: normal; }
+.md-select optgroup option { font-weight: 700; padding-left: 4px; }
 .md-rot {
   font-family: inherit; font-size: 13px; font-weight: 800; cursor: pointer; color: var(--parch); align-self: flex-start;
   background: rgba(0,0,0,.4); border: 1px solid rgba(217,180,90,.45); border-radius: 6px; padding: 6px 14px;

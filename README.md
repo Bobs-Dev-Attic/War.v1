@@ -30,7 +30,9 @@ The **New Battle** planner has two tabs:
 2. **⚔️ Deploy Armies** — the **battlefield mini-map is the interface**. It shows
    the whole field at once: the **Horde's half up top**, **Rome's below**. **Click
    an empty spot to drop a unit group**; the **panel on the right expands into a
-   form** to configure it — **unit type, quantity, formation and facing**. **Click
+   form** to configure it — **unit type, quantity, formation and facing**. The unit
+   picker is **grouped into categories** (Infantry, Missile, Cavalry, Siege) so it
+   stays tidy as the roster grows. **Click
    or drag a marker** to move it; **click a marker to edit** it in that panel (or
    **remove** it). Each marker's numbered anchor shows its size and an arrow shows
    which way it faces. Both armies are placed the same way on the one map.
