@@ -1,5 +1,5 @@
 import { ATTRS, ATTR_LABELS } from './attributes.js';
-import { UNIT_TYPES, ROMAN_TYPES, BARBARIAN_TYPES } from './unitTypes.js';
+import { UNIT_TYPES, ROMAN_TYPES, BARBARIAN_TYPES, categorizeTypes } from './unitTypes.js';
 import { ENVIRONMENTS, ENV_KEYS, DEFAULT_ENV } from './environments.js';
 import { FORMATIONS, FORMATION_KEYS, formationOffsets, rotateSlots, PLACEMENT_BOUNDS, DEFAULT_FORMATION } from './formations.js';
 import { defaultGroups } from './game.js';
@@ -373,14 +373,20 @@ export class UI {
     const sideEl = document.getElementById('md-side');
     sideEl.textContent = side === 'roman' ? '🦅 Rome' : '🪓 The Horde';
     sideEl.className = 'md-side ' + (side === 'roman' ? 'rome' : 'horde');
-    // Unit type.
+    // Unit type — grouped into battlefield categories (Infantry / Missile /
+    // Cavalry / Siege) so the roster stays tidy as more types are added.
     const typeSel = document.getElementById('md-type');
     typeSel.innerHTML = '';
-    for (const key of this._sideTypes(side)) {
-      const o = document.createElement('option');
-      o.value = key; o.textContent = UNIT_TYPES[key].label;
-      if (key === grp.typeKey) o.selected = true;
-      typeSel.appendChild(o);
+    for (const cat of categorizeTypes(this._sideTypes(side))) {
+      const og = document.createElement('optgroup');
+      og.label = cat.label;
+      for (const key of cat.keys) {
+        const o = document.createElement('option');
+        o.value = key; o.textContent = UNIT_TYPES[key].label;
+        if (key === grp.typeKey) o.selected = true;
+        og.appendChild(o);
+      }
+      typeSel.appendChild(og);
     }
     this._fillCountSelect(side, grp);
     // Formation.

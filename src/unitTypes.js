@@ -162,6 +162,34 @@ export const UNIT_TYPES = {
 export const ROMAN_TYPES = Object.keys(UNIT_TYPES).filter((k) => UNIT_TYPES[k].faction === 'roman');
 export const BARBARIAN_TYPES = Object.keys(UNIT_TYPES).filter((k) => UNIT_TYPES[k].faction === 'barbarian');
 
+// Broad battlefield categories, for grouping the ever-growing type roster in the
+// setup UI. Order defines how the groups are listed.
+export const UNIT_CATEGORIES = [
+  { key: 'infantry', label: '⚔️ Infantry' },
+  { key: 'missile', label: '🏹 Missile' },
+  { key: 'cavalry', label: '🐎 Cavalry' },
+  { key: 'siege', label: '🎯 Siege' },
+];
+
+// Which category a unit type belongs to (mounted → cavalry, on foot by role).
+export function unitCategory(typeKey) {
+  const t = UNIT_TYPES[typeKey];
+  if (!t) return 'infantry';
+  if (t.role === 'siege') return 'siege';
+  if (t.cfg && t.cfg.mounted) return 'cavalry';
+  if (t.role === 'ranged') return 'missile';
+  return 'infantry';
+}
+
+// Group a list of type keys into ordered { label, keys[] } buckets, skipping empties.
+export function categorizeTypes(keys) {
+  const buckets = {};
+  for (const k of keys) (buckets[unitCategory(k)] ||= []).push(k);
+  return UNIT_CATEGORIES
+    .filter((c) => buckets[c.key] && buckets[c.key].length)
+    .map((c) => ({ label: c.label, keys: buckets[c.key] }));
+}
+
 // Default army compositions (used on first load and as the setup defaults).
 export const DEFAULT_ARMY = {
   roman: { legionary: 2, hastatus: 1, sagittarius: 1 },
