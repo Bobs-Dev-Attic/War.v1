@@ -1,5 +1,6 @@
 import { ATTRS, ATTR_LABELS } from './attributes.js';
-import { UNIT_TYPES, ROMAN_TYPES, BARBARIAN_TYPES, categorizeTypes } from './unitTypes.js';
+import { UNIT_TYPES, categorizeTypes, typesFor } from './unitTypes.js';
+import { ERAS, ERA_KEYS, DEFAULT_ERA } from './eras.js';
 import { ENVIRONMENTS, ENV_KEYS, DEFAULT_ENV } from './environments.js';
 import { FORMATIONS, FORMATION_KEYS, formationOffsets, rotateSlots, PLACEMENT_BOUNDS, DEFAULT_FORMATION } from './formations.js';
 import { defaultGroups } from './game.js';
@@ -48,7 +49,7 @@ export class UI {
     });
     document.getElementById('setup-cancel').addEventListener('click', () => this.closeSetup());
     document.getElementById('setup-start').addEventListener('click', () => {
-      game.startBattle({ environment: this._setupEnv, groups: this._stripGroups() });
+      game.startBattle({ era: this._setupEra, environment: this._setupEnv, groups: this._stripGroups() });
       this.closeSetup();
     });
     // Tabs: Location / Deploy Armies.
@@ -75,6 +76,7 @@ export class UI {
   // Each side is a list of GROUPS: { id, typeKey, count, formation, rot, x, z }.
   openSetup() {
     this._gid = this._gid || 0;
+    this._setupEra = this.game.era || DEFAULT_ERA;
     this._setupEnv = this.game.environment;
     this._setupGroups = {
       roman: this.game.groups.roman.map((g) => ({ ...g, rot: g.rot || 0, id: ++this._gid })),
@@ -87,7 +89,7 @@ export class UI {
     this.setup.classList.add('show');
   }
 
-  _sideTypes(side) { return side === 'roman' ? ROMAN_TYPES : BARBARIAN_TYPES; }
+  _sideTypes(side) { return typesFor(this._setupEra || DEFAULT_ERA, side); }
   _sideCount(side) { return this._setupGroups[side].reduce((a, g) => a + g.count, 0); }
   _stripGroups() {
     const strip = (gs) => gs.map(({ typeKey, count, formation, rot, x, z }) => ({ typeKey, count, formation, rot: rot || 0, x, z }));
@@ -95,12 +97,56 @@ export class UI {
   }
 
   _renderAll() {
+    this._renderEraChoices();
+    this._relabelSides();
     this._renderEnvChoices();
     this._renderSaves();
     this._closeMarker();
     this._drawField();
     this._renderDeployList();
     this._refreshTotals();
+  }
+
+  // ---- Era selector ------------------------------------------------------
+  _renderEraChoices() {
+    const host = document.getElementById('era-choices');
+    if (!host) return;
+    host.innerHTML = '';
+    for (const key of ERA_KEYS) {
+      const e = ERAS[key];
+      const tile = document.createElement('button');
+      tile.className = 'era-tile' + (key === this._setupEra ? ' sel' : '');
+      tile.innerHTML = `<span class="era-emoji">${e.emoji}</span>
+        <span class="era-name">${e.label}</span><span class="era-blurb">${e.blurb}</span>`;
+      tile.addEventListener('click', () => this._selectEra(key));
+      host.appendChild(tile);
+    }
+  }
+
+  _selectEra(key) {
+    if (key === this._setupEra || !ERAS[key]) return;
+    this._setupEra = key;
+    // Rosters differ per era, so old placements are invalid — reset to defaults.
+    this._loadDefaultsForEra();
+  }
+
+  _loadDefaultsForEra() {
+    const d = defaultGroups(this._setupEra);
+    this._setupGroups = {
+      roman: d.roman.map((g) => ({ ...g, rot: g.rot || 0, id: ++this._gid })),
+      barbarian: d.barbarian.map((g) => ({ ...g, rot: g.rot || 0, id: ++this._gid })),
+    };
+    this._editing = null;
+    this._renderAll();
+  }
+
+  // Reflect the current era's side names in the deploy totals and battle tally.
+  _relabelSides() {
+    const s = (ERAS[this._setupEra] || ERAS[DEFAULT_ERA]).sides;
+    const rl = document.getElementById('rome-side-label');
+    const hl = document.getElementById('horde-side-label');
+    if (rl) rl.textContent = `${s.roman.emoji} ${s.roman.label}`;
+    if (hl) hl.textContent = `${s.barbarian.emoji} ${s.barbarian.label}`;
   }
 
   // ---- Save / load battle configurations (localStorage) -----------------
@@ -117,7 +163,7 @@ export class UI {
     let name = (input.value || '').trim();
     const list = this._loadSaves();
     if (!name) name = 'Battle ' + (list.length + 1);
-    const entry = { name, env: this._setupEnv, groups: this._stripGroups() };
+    const entry = { name, era: this._setupEra, env: this._setupEnv, groups: this._stripGroups() };
     const i = list.findIndex((s) => s.name === name);   // overwrite same-name
     if (i >= 0) list[i] = entry; else list.push(entry);
     this._persistSaves(list);
@@ -126,6 +172,7 @@ export class UI {
   }
 
   _loadConfig(entry) {
+    if (entry.era && ERAS[entry.era]) this._setupEra = entry.era;
     if (ENV_KEYS.includes(entry.env)) this._setupEnv = entry.env;
     const revive = (gs) => (gs || []).map((g) => ({ ...g, rot: g.rot || 0, id: ++this._gid }));
     this._setupGroups = { roman: revive(entry.groups.roman), barbarian: revive(entry.groups.barbarian) };
@@ -236,8 +283,9 @@ export class UI {
     g.beginPath(); g.moveTo(0, H / 2); g.lineTo(W, H / 2); g.stroke(); g.setLineDash([]);
     // Half labels.
     g.font = 'bold 12px sans-serif'; g.textAlign = 'center';
-    g.fillStyle = 'rgba(224,150,74,0.85)'; g.fillText('🪓 THE HORDE', W / 2, 18);
-    g.fillStyle = 'rgba(120,170,255,0.9)'; g.fillText('🦅 ROME', W / 2, H - 10);
+    const sides = (ERAS[this._setupEra] || ERAS[DEFAULT_ERA]).sides;
+    g.fillStyle = 'rgba(224,150,74,0.85)'; g.fillText(`${sides.barbarian.emoji} ${sides.barbarian.label.toUpperCase()}`, W / 2, 18);
+    g.fillStyle = 'rgba(120,170,255,0.9)'; g.fillText(`${sides.roman.emoji} ${sides.roman.label.toUpperCase()}`, W / 2, H - 10);
 
     for (const side of ['barbarian', 'roman']) {
       const col = side === 'roman' ? '90,160,255' : '224,150,74';
@@ -516,7 +564,7 @@ export class UI {
   }
 
   _defaultSetup() {
-    const d = defaultGroups();
+    const d = defaultGroups(this._setupEra);
     this._setupGroups = {
       roman: d.roman.map((g) => ({ ...g, rot: g.rot || 0, id: ++this._gid })),
       barbarian: d.barbarian.map((g) => ({ ...g, rot: g.rot || 0, id: ++this._gid })),
@@ -529,20 +577,25 @@ export class UI {
   updateTally(game) {
     this.romeCount.textContent = game.livingRomans().length;
     this.hordeCount.textContent = game.livingHorde().length;
+    const sides = (ERAS[game.era] || ERAS[DEFAULT_ERA]).sides;
+    const rl = document.getElementById('rome-label'), hl = document.getElementById('horde-label');
+    if (rl) rl.textContent = sides.roman.short;
+    if (hl) hl.textContent = sides.barbarian.short;
   }
 
   updateSelectionInfo(game) {
     const n = game.selected.size;
+    const unit = (ERAS[game.era] || ERAS[DEFAULT_ERA]).sides.roman.unit;
     if (game.livingRomans().length === 0) {
-      this.selInfo.innerHTML = 'The legion is no more.';
+      this.selInfo.innerHTML = 'Your force is no more.';
       return;
     }
     if (n === 0) {
-      this.selInfo.innerHTML = 'Commanding <em>all</em> legionaries — click one or drag a box to pick a squad';
+      this.selInfo.innerHTML = `Commanding <em>all</em> ${unit} — click one or drag a box to pick a squad`;
     } else {
       const orders = new Set([...game.selected].map((u) => u.order));
       const order = orders.size === 1 ? [...orders][0] : 'mixed';
-      this.selInfo.innerHTML = `<em>${n}</em> legionar${n === 1 ? 'y' : 'ies'} selected · orders: <em>${order}</em>`;
+      this.selInfo.innerHTML = `<em>${n}</em> selected · orders: <em>${order}</em>`;
     }
   }
 

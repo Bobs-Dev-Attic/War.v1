@@ -213,6 +213,19 @@ function shootPose(j, t) {
   j.head.rotation.y = 0.1 * draw;
 }
 
+function musketPose(j, t) {
+  // Level the piece at the foe, a sharp recoil kick at the shot, then recover.
+  j.rightShoulder.rotation.x = kf(t, [[0, 0.35], [0.35, 0.55], [0.5, 0.52], [0.58, 0.68], [1, 0.35]]);
+  j.rightElbow.rotation.x = kf(t, [[0, 1.2], [0.35, 1.02], [0.5, 0.98], [0.58, 1.3], [1, 1.2]]);
+  j.chest.rotation.y = kf(t, [[0, 0], [0.4, -0.14], [1, 0]]);   // turn side-on to present
+}
+
+function cannonPose(j, t) {
+  // The barrel recoils back along the carriage on firing, then runs out again.
+  if (!j.siegeArm) return;
+  j.siegeArm.position.z = kf(t, [[0, 0], [0.48, 0], [0.56, 0.4], [0.74, 0.34], [1, 0]]);
+}
+
 function catapultPose(j, t) {
   // The throwing arm rests laid back (~ -1.15), then SNAPS up and forward into
   // the stop-beam, flinging the stone; it recoils and settles.
@@ -251,6 +264,8 @@ export const MOVES = {
   throwJavelin: { type: 'ranged', dur: 0.72, release: 0.55, projectile: 'javelin', pose: throwPose },
   catapultFire: { type: 'ranged', dur: 1.15, release: 0.63, projectile: 'boulder', pose: catapultPose },
   ballistaFire: { type: 'ranged', dur: 0.8, release: 0.52, projectile: 'bolt', pose: ballistaPose },
+  fireMusket: { type: 'ranged', dur: 0.85, release: 0.5, projectile: 'ball', pose: musketPose },
+  cannonFire: { type: 'ranged', dur: 1.0, release: 0.5, projectile: 'roundshot', pose: cannonPose },
   block:      { type: 'defense', dur: 0.55, pose: blockPose },
   dodgeL:     { type: 'defense', dur: 0.5, pose: dodgePose(1) },
   dodgeR:     { type: 'defense', dur: 0.5, pose: dodgePose(-1) },

@@ -1,22 +1,24 @@
 import * as THREE from 'three';
 import { Unit } from './unit.js';
-import { DEFAULT_ARMY, UNIT_TYPES } from './unitTypes.js';
+import { UNIT_TYPES } from './unitTypes.js';
 import { formationOffsets, rotateSlots, DEFAULT_FORMATION, PLACEMENT_BOUNDS } from './formations.js';
 import { ENVIRONMENTS, DEFAULT_ENV } from './environments.js';
+import { ERAS, DEFAULT_ERA } from './eras.js';
 
 // A deployment is a list of GROUPS per side; each group is a block of one unit
 // type with its own count, formation and anchor position on the field. The
 // default lays one group per type, spread along the muster line.
-export function defaultGroups() {
-  const build = (army, side) => {
-    const keys = Object.keys(army);
+export function defaultGroups(era = DEFAULT_ERA) {
+  const army = (ERAS[era] || ERAS[DEFAULT_ERA]).defaultArmy;
+  const build = (comp, side) => {
+    const keys = Object.keys(comp);
     const dz = side === 'roman' ? 9 : -9;
     return keys.map((k, i) => ({
-      typeKey: k, count: army[k], formation: DEFAULT_FORMATION, rot: 0,
+      typeKey: k, count: comp[k], formation: DEFAULT_FORMATION, rot: 0,
       x: Math.round((i - (keys.length - 1) / 2) * 7), z: dz,
     }));
   };
-  return { roman: build(DEFAULT_ARMY.roman, 'roman'), barbarian: build(DEFAULT_ARMY.barbarian, 'barbarian') };
+  return { roman: build(army.roman, 'roman'), barbarian: build(army.barbarian, 'barbarian') };
 }
 
 export class Game {
@@ -46,7 +48,8 @@ export class Game {
     // Chosen battlefield and each side's deployment groups (editable via the
     // New Battle screen). Each group: { typeKey, count, formation, x, z }.
     this.environment = DEFAULT_ENV;
-    this.groups = defaultGroups();
+    this.era = DEFAULT_ERA;
+    this.groups = defaultGroups(this.era);
     if (world.applyEnvironment) world.applyEnvironment(ENVIRONMENTS[this.environment]);
 
     this.group = new THREE.Group();
@@ -279,7 +282,15 @@ export class Game {
   // ---- Projectiles (arrows & javelins) ----------------------------------
   spawnProjectile(shooter, target, kind, dmg) {
     const g = new THREE.Group();
-    if (kind === 'arrow') {
+    if (kind === 'ball') {
+      // A musket ball — a tiny, very fast lead sphere with a puff of smoke.
+      const ball = new THREE.Mesh(
+        new THREE.SphereGeometry(0.05, 6, 5),
+        new THREE.MeshStandardMaterial({ color: 0x2a2a2a, metalness: 0.4, roughness: 0.6 })
+      );
+      g.add(ball);
+      this.spawnDust(shooter.position.x, shooter.position.z, 4, 0.9);   // muzzle smoke
+    } else if (kind === 'arrow') {
       const shaft = new THREE.Mesh(
         new THREE.CylinderGeometry(0.015, 0.015, 0.7, 5),
         new THREE.MeshStandardMaterial({ color: 0x8a6a3a, roughness: 0.8 })
@@ -315,7 +326,7 @@ export class Game {
     this.group.add(g);
     this.projectiles.push({
       mesh: g, target, shooter, dmg,
-      speed: kind === 'arrow' ? 22 : 15,
+      speed: kind === 'ball' ? 46 : kind === 'arrow' ? 22 : 15,
       life: 3,
     });
   }
@@ -324,7 +335,14 @@ export class Game {
   // bolt (a fast, shield-piercing single-target dart).
   spawnSiegeProjectile(shooter, aim, kind, dmg, aoeRadius, targetUnit) {
     const g = new THREE.Group();
-    if (kind === 'boulder') {
+    if (kind === 'roundshot') {
+      const iron = new THREE.Mesh(
+        new THREE.SphereGeometry(0.16, 8, 6),
+        new THREE.MeshStandardMaterial({ color: 0x1e2024, metalness: 0.5, roughness: 0.5 })
+      );
+      g.add(iron);
+      this.spawnDust(shooter.position.x, shooter.position.z, 8, 1.3);    // muzzle blast
+    } else if (kind === 'boulder') {
       const stone = new THREE.Mesh(
         new THREE.SphereGeometry(0.24, 8, 6),
         new THREE.MeshStandardMaterial({ color: 0x8f8f95, roughness: 0.95 })
@@ -346,13 +364,17 @@ export class Game {
     g.position.copy(from);
     g.castShadow = true;
     this.group.add(g);
-    if (kind === 'boulder') {
+    if (kind === 'boulder' || kind === 'roundshot') {
       const gy = this.world.heightAt ? this.world.heightAt(aim.x, aim.z) : 0;
       const dist = Math.hypot(aim.x - from.x, aim.z - from.z);
+      // Round shot flies flat and fast; a catapult boulder lobs high and slow.
+      const flat = kind === 'roundshot';
       this.projectiles.push({
         mesh: g, kind: 'boulder', shooter, dmg, aoe: aoeRadius,
         from: { x: from.x, y: from.y, z: from.z }, to: { x: aim.x, y: gy + 0.2, z: aim.z },
-        t: 0, flight: Math.min(1.8, Math.max(0.6, 0.5 + dist / 26)), arc: 4 + dist * 0.13,
+        t: 0,
+        flight: flat ? Math.min(1.0, Math.max(0.35, 0.25 + dist / 55)) : Math.min(1.8, Math.max(0.6, 0.5 + dist / 26)),
+        arc: flat ? 0.8 + dist * 0.03 : 4 + dist * 0.13,
         spin: new THREE.Vector3((Math.random() - 0.5) * 6, (Math.random() - 0.5) * 6, (Math.random() - 0.5) * 6),
       });
     } else {
@@ -723,16 +745,15 @@ export class Game {
     const romans = this.livingRomans().length;
     const horde = this.livingHorde().length;
     const romansSurrendered = this.romans.every((u) => !u.alive || u.hasSurrendered);
+    const win = (ERAS[this.era] || ERAS[DEFAULT_ERA]).win;
     if (horde === 0 && romans > 0) {
       this.over = true;
       this._celebrate('roman');
-      this.ui.showOutcome(true, 'The horde is broken. Rome stands triumphant!');
+      this.ui.showOutcome(true, win.a);
     } else if (romans === 0) {
       this.over = true;
       if (this.livingHorde().length > 0) this._celebrate('barbarian');
-      const msg = romansSurrendered && this.romans.some((u) => u.hasSurrendered)
-        ? 'The legion has laid down its arms. The field is lost.'
-        : 'The legion is overrun. The eagles have fallen.';
+      const msg = romansSurrendered && this.romans.some((u) => u.hasSurrendered) ? win.bSurrender : win.b;
       this.ui.showOutcome(false, msg);
     }
   }
@@ -748,6 +769,7 @@ export class Game {
   // Start a fresh battle with the given deployment (from the setup screen).
   startBattle(settings) {
     if (settings) {
+      if (settings.era && ERAS[settings.era]) this.era = settings.era;
       if (settings.environment && ENVIRONMENTS[settings.environment]) this.environment = settings.environment;
       if (settings.groups) {
         this.groups = {

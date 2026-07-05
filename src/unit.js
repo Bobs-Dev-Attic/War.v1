@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { buildHumanoid, ROMAN_CONFIG, BARBARIAN_CONFIG } from './humanoid.js';
-import { rollAttributes, deriveStats, pickName, rankFor, PROFILES } from './attributes.js';
+import { buildHumanoid, baseConfig } from './humanoid.js';
+import { rollAttributes, deriveStats, pickName, rankFor, MAX_SPD_ATTR } from './attributes.js';
 import { MOVES, pickCombo } from './moves.js';
 import { UNIT_TYPES } from './unitTypes.js';
 
@@ -10,11 +10,10 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 // The fastest a foot soldier can ever be: the best possible Speed roll times the
 // quickest infantry type's speed bonus. Derived from the data so it stays right
 // if attributes or unit types change.
-const _MAX_SPD_ATTR = Math.max(...Object.values(PROFILES).map((p) => p.spd[1]));
 const _TOP_FOOT_TYPE_MUL = Math.max(1, ...Object.values(UNIT_TYPES)
   .filter((t) => t.role !== 'siege' && !(t.cfg && t.cfg.mounted))
   .map((t) => (t.stat && t.stat.speed) || 1));
-const TOP_FOOT_SPEED = deriveStats({ str: 18, dex: 18, con: 18, spd: _MAX_SPD_ATTR, exp: 18 }).speed * _TOP_FOOT_TYPE_MUL;
+const TOP_FOOT_SPEED = deriveStats({ str: 18, dex: 18, con: 18, spd: MAX_SPD_ATTR, exp: 18 }).speed * _TOP_FOOT_TYPE_MUL;
 // A mount at full health moves AT LEAST twice as fast as the fastest foot soldier.
 const MOUNTED_MIN_SPEED = 2 * TOP_FOOT_SPEED;
 
@@ -25,13 +24,14 @@ export class Unit {
     this.typeKey = typeKey || (faction === 'roman' ? 'legionary' : 'warrior');
     const type = UNIT_TYPES[this.typeKey];
     this.type = type;
-    this.role = type.role;                   // 'melee' | 'pike' | 'ranged'
+    this.era = type.era || 'antiquity';
+    this.role = type.role;                   // 'melee' | 'pike' | 'ranged' | 'siege'
     this.ranged = type.ranged || null;
 
     // Roll this soldier as an individual, then derive combat stats.
-    this.attrs = rollAttributes(faction);
+    this.attrs = rollAttributes(faction, this.era);
     this.stats = deriveStats(this.attrs);
-    this.name = pickName(faction);
+    this.name = pickName(faction, this.era);
     this.rank = type.label;
 
     // Apply the type's specialities on top of the rolled stats.
@@ -64,12 +64,12 @@ export class Unit {
     this.moveTarget = null;                  // Vector3 (explicit move command)
     this.forcedTarget = null;                // Unit (focus-fire command)
 
-    const base = faction === 'roman' ? ROMAN_CONFIG : BARBARIAN_CONFIG;
-    const cfg = { ...base, ...type.cfg };
+    const cfg = { ...baseConfig(this.era, faction), ...type.cfg };
     this.weaponKind = cfg.weapon;
     this.polearm = cfg.weapon === 'spear' || cfg.weapon === 'pike';
     this.twoHanded = cfg.weapon === 'greataxe' || cfg.weapon === 'maul';
     this.isBow = cfg.weapon === 'bow';
+    this.firearm = cfg.weapon === 'musket' || cfg.weapon === 'rifle';  // muzzle-loaders
     this.mounted = !!cfg.mounted;
     this.siege = !!cfg.siege;
     this.siegeKind = cfg.siege || null;
@@ -701,7 +701,7 @@ export class Unit {
     this._faceTarget(target, dt);
     if (this.rangedCooldown <= 0 && this.attackCooldown <= 0) {
       this._comboTarget = target;
-      this._startMove(rg.projectile === 'arrow' ? 'shoot' : 'throwJavelin');
+      this._startMove(rg.move || (rg.projectile === 'arrow' ? 'shoot' : 'throwJavelin'));
     } else {
       this._animateIdle(dt);
     }
@@ -858,7 +858,8 @@ export class Unit {
     if (aim && this.rangedCooldown <= 0 && this.attackCooldown <= 0) {
       this._siegeAim = { x: aim.x, z: aim.z };
       this._comboTarget = aim.unit || null;
-      this._startMove(this.siegeKind === 'ballista' ? 'ballistaFire' : 'catapultFire');
+      this._startMove(this.siegeKind === 'ballista' ? 'ballistaFire'
+        : this.siegeKind === 'cannon' ? 'cannonFire' : 'catapultFire');
     } else {
       this._animateSiegeIdle(dt);
     }
@@ -906,9 +907,11 @@ export class Unit {
   _animateSiegeIdle(dt) {
     this.animT += dt;
     if (this.siegeArm) {
-      // Ease the arm back to its loaded rest pose while the crew reloads.
+      // Ease the arm/barrel back to its rest pose while the crew reloads.
       if (this.siegeKind === 'ballista') {
         this.siegeArm.position.z += (-0.15 - this.siegeArm.position.z) * Math.min(1, dt * 4);
+      } else if (this.siegeKind === 'cannon') {
+        this.siegeArm.position.z += (0 - this.siegeArm.position.z) * Math.min(1, dt * 4);
       } else {
         this.siegeArm.rotation.x += (-1.15 - this.siegeArm.rotation.x) * Math.min(1, dt * 3);
       }

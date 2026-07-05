@@ -157,10 +157,81 @@ export const UNIT_TYPES = {
     combos: [['thrust']],
     desc: 'Crude war-sling — heaves a great rock that scatters and crushes ranks.',
   },
+
+  // ================= American Revolution — Continental Army =================
+  continental: {
+    faction: 'roman', era: 'revolution', label: 'Continental Infantry', role: 'ranged', reach: 1.9, points: 1, category: 'infantry',
+    cfg: { weapon: 'musket', helmet: 'tricorne', cockade: 0x213a8a },
+    stat: {},
+    ranged: { min: 3, max: 13, cooldown: 2.6, projectile: 'ball', dmgMul: 1.15, meleeFallback: true, move: 'fireMusket' },
+    combos: [['thrust']],
+    desc: 'Line infantry — a volley, then the bayonet.',
+  },
+  rifleman: {
+    faction: 'roman', era: 'revolution', label: 'Rifleman', role: 'ranged', reach: 1.6, points: 2, category: 'missile',
+    cfg: { weapon: 'rifle', helmet: 'tricorne', hat: 0x2a2418, torso: 0x5a4a2a, arms: 0x5a4a2a, legs: 0x6a5636 },
+    stat: { hp: 0.85, speed: 1.1, accuracy: 0.1 },
+    ranged: { min: 5, max: 20, cooldown: 3.6, projectile: 'ball', dmgMul: 1.5, move: 'fireMusket' },
+    combos: [['thrust']],
+    desc: 'Frontier marksman — deadly at long range, slow to reload.',
+  },
+  dragoon: {
+    faction: 'roman', era: 'revolution', label: 'Continental Dragoon', role: 'melee', reach: 2.0, points: 3, category: 'cavalry',
+    cfg: { weapon: 'gladius', helmet: 'tricorne', mounted: true, horse: 0x5a3a22, saddleCloth: 0x213a8a },
+    stat: { hp: 1.08, dmg: 1.06, speed: 1.75 }, combos: 'roman',
+    desc: 'Mounted trooper — sabres down stragglers and scouts the flank.',
+  },
+  contCannon: {
+    faction: 'roman', era: 'revolution', label: 'Continental Cannon', role: 'siege', reach: 1.6, points: 5, category: 'siege',
+    cfg: { siege: 'cannon', weapon: 'cannon', shield: null, frame: 0x3a5a3a, helmet: 'tricorne', torso: 0x213a8a },
+    stat: { hp: 1.4, toughness: 0.08, speed: 0, dmg: 1.15 },
+    ranged: { min: 7, max: 30, cooldown: 3.8, projectile: 'roundshot', dmgMul: 2.2, aoe: 2.6 },
+    combos: [['thrust']],
+    desc: 'Field gun — round shot that bounds through the ranks.',
+  },
+
+  // ================= American Revolution — The Crown =================
+  redcoat: {
+    faction: 'barbarian', era: 'revolution', label: 'Redcoat', role: 'ranged', reach: 1.9, points: 1, category: 'infantry',
+    cfg: { weapon: 'musket', helmet: 'tricorne', cockade: 0x111111 },
+    stat: { accuracy: 0.04, hp: 1.05 },
+    ranged: { min: 3, max: 13, cooldown: 2.4, projectile: 'ball', dmgMul: 1.15, meleeFallback: true, move: 'fireMusket' },
+    combos: [['thrust']],
+    desc: 'British line infantry — disciplined volleys and cold steel.',
+  },
+  grenadier: {
+    faction: 'barbarian', era: 'revolution', label: 'Grenadier', role: 'ranged', reach: 1.95, points: 2, category: 'infantry',
+    cfg: { weapon: 'musket', helmet: 'bearskin', torso: 0xa42a24 },
+    stat: { hp: 1.2, dmg: 1.05, toughness: 0.05, elite: true },
+    ranged: { min: 3, max: 13, cooldown: 2.4, projectile: 'ball', dmgMul: 1.2, meleeFallback: true, move: 'fireMusket' },
+    combos: [['thrust'], ['thrust', 'thrust']],
+    desc: 'Elite assault infantry — tall bearskins, hard-hitting and steady.',
+  },
+  lightDragoon: {
+    faction: 'barbarian', era: 'revolution', label: 'Light Dragoon', role: 'melee', reach: 2.0, points: 3, category: 'cavalry',
+    cfg: { weapon: 'gladius', helmet: 'tricorne', mounted: true, horse: 0x33261a, saddleCloth: 0xa42a24 },
+    stat: { hp: 1.06, dmg: 1.08, speed: 1.8 }, combos: 'barbarian',
+    desc: "King's cavalry — fast sabre-armed riders who run down the routed.",
+  },
+  royalCannon: {
+    faction: 'barbarian', era: 'revolution', label: 'Royal Artillery', role: 'siege', reach: 1.6, points: 5, category: 'siege',
+    cfg: { siege: 'cannon', weapon: 'cannon', shield: null, frame: 0x5a3020, helmet: 'tricorne', torso: 0xa42a24 },
+    stat: { hp: 1.4, toughness: 0.08, speed: 0, dmg: 1.18 },
+    ranged: { min: 7, max: 30, cooldown: 3.6, projectile: 'roundshot', dmgMul: 2.2, aoe: 2.6 },
+    combos: [['thrust']],
+    desc: 'Crown field guns — round shot that tears great lanes in a charge.',
+  },
 };
 
-export const ROMAN_TYPES = Object.keys(UNIT_TYPES).filter((k) => UNIT_TYPES[k].faction === 'roman');
-export const BARBARIAN_TYPES = Object.keys(UNIT_TYPES).filter((k) => UNIT_TYPES[k].faction === 'barbarian');
+export const eraOf = (typeKey) => UNIT_TYPES[typeKey].era || 'antiquity';
+
+// All type keys for a side within an era (drives the setup roster per era).
+export function typesFor(era, faction) {
+  return Object.keys(UNIT_TYPES).filter((k) => eraOf(k) === era && UNIT_TYPES[k].faction === faction);
+}
+
+export const ROMAN_TYPES = typesFor('antiquity', 'roman');
+export const BARBARIAN_TYPES = typesFor('antiquity', 'barbarian');
 
 // Broad battlefield categories, for grouping the ever-growing type roster in the
 // setup UI. Order defines how the groups are listed.
@@ -175,6 +246,7 @@ export const UNIT_CATEGORIES = [
 export function unitCategory(typeKey) {
   const t = UNIT_TYPES[typeKey];
   if (!t) return 'infantry';
+  if (t.category) return t.category;                 // explicit override (e.g. musket line = infantry)
   if (t.role === 'siege') return 'siege';
   if (t.cfg && t.cfg.mounted) return 'cavalry';
   if (t.role === 'ranged') return 'missile';
