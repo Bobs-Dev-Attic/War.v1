@@ -289,7 +289,6 @@ export class Game {
         new THREE.MeshStandardMaterial({ color: 0x2a2a2a, metalness: 0.4, roughness: 0.6 })
       );
       g.add(ball);
-      this.spawnDust(shooter.position.x, shooter.position.z, 4, 0.9);   // muzzle smoke
     } else if (kind === 'arrow') {
       const shaft = new THREE.Mesh(
         new THREE.CylinderGeometry(0.015, 0.015, 0.7, 5),
@@ -507,9 +506,29 @@ export class Game {
       this.dust.push({
         mesh: s,
         v: new THREE.Vector3((Math.random() - 0.5) * 1.2 * force, 0.5 + Math.random() * 0.7, (Math.random() - 0.5) * 1.2 * force),
-        life: 0.6 + Math.random() * 0.5, age: 0, grow: 1.4 + Math.random(),
+        life: 0.6 + Math.random() * 0.5, age: 0, grow: 1.4 + Math.random(), op: 0.52,
       });
     }
+  }
+
+  // A gunshot: a bright muzzle flash and a bloom of powder smoke at (pos).
+  spawnMuzzleFlash(pos, dirx = 0, dirz = 0) {
+    if (this.dust.length > 240) return;
+    const push = (color, opacity, scale, life, grow, spread, vy, add) => {
+      const mat = new THREE.SpriteMaterial({ map: this._dustTex(), color, transparent: true, opacity, depthWrite: false });
+      if (add) mat.blending = THREE.AdditiveBlending;
+      const s = new THREE.Sprite(mat);
+      s.position.set(pos.x + dirx * 0.12 + (Math.random() - 0.5) * spread, pos.y + (Math.random() - 0.5) * spread, pos.z + dirz * 0.12 + (Math.random() - 0.5) * spread);
+      s.scale.setScalar(scale);
+      this.group.add(s);
+      this.dust.push({
+        mesh: s, v: new THREE.Vector3(dirx * 1.1 + (Math.random() - 0.5) * 0.5, vy, dirz * 1.1 + (Math.random() - 0.5) * 0.5),
+        life, age: 0, grow, op: opacity,
+      });
+    };
+    push(0xfff0b0, 1.0, 0.75, 0.09, 4.5, 0.05, 0.1, true);   // white-hot flash
+    push(0xffb347, 0.9, 0.5, 0.14, 3.2, 0.1, 0.3, true);     // orange bloom
+    for (let i = 0; i < 4; i++) push(0xdedede, 0.55, 0.42, 0.55 + Math.random() * 0.5, 1.7, 0.25, 0.35 + Math.random() * 0.3, false);
   }
 
   _updateDust(dt) {
@@ -527,7 +546,7 @@ export class Game {
       d.mesh.position.addScaledVector(d.v, dt);
       const k = d.age / d.life;
       d.mesh.scale.setScalar(d.mesh.scale.x + d.grow * dt);
-      d.mesh.material.opacity = (0.32 + 0.2) * (1 - k) * (1 - k);
+      d.mesh.material.opacity = (d.op || 0.52) * (1 - k) * (1 - k);
     }
   }
 
