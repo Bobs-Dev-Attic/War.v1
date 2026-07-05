@@ -530,23 +530,42 @@ function attachEquipment(c, arms) {
     arms.left.hand.add(bow);
     arms.left.hand.userData.isBow = true;
   } else if (c.weapon === 'musket' || c.weapon === 'rifle') {
-    // A muzzle-loader: wooden stock + steel barrel run along the hand's −y (so a
-    // raised elbow shoulders it), tipped with a socket bayonet.
-    const long = c.weapon === 'rifle' ? 1.5 : 1.32;
+    // A flintlock muzzle-loader built along the hand's local axis: the BUTT sits
+    // behind the grip (+y, to tuck into the shoulder) and the barrel runs forward
+    // (−y) to a socket bayonet. Grip is at the wrist (y≈0), by the lock.
+    const rifle = c.weapon === 'rifle';
+    const long = rifle ? 1.55 : 1.34;          // barrel length forward of the grip
+    const wood = rifle ? 0x6a4a26 : 0x5c3d20;
+    const iron = 0x2b2b30, brass = 0xb08a3a;
     const gun = new THREE.Group();
-    const stock = box(0.06, long * 0.46, 0.08, 0x5a3a1e, 0.85); stock.position.y = -(long * 0.22); gun.add(stock);
-    const barrel = cyl(0.02, 0.022, long, 0x30302e, 8, 0.4, 0.6); barrel.position.y = -(long * 0.5); gun.add(barrel);
-    const lock = box(0.05, 0.1, 0.06, 0x39312a, 0.5, 0.4); lock.position.set(0.05, -0.13, 0); gun.add(lock);
+    // ---- Butt & stock (behind the hand) ----
+    const butt = box(0.085, 0.34, 0.13, wood, 0.82); butt.position.set(0, 0.24, 0.015); butt.rotation.x = 0.12; gun.add(butt);
+    const comb = box(0.06, 0.2, 0.06, wood, 0.82); comb.position.set(0, 0.12, -0.02); gun.add(comb);       // wrist/comb
+    const buttplate = box(0.09, 0.05, 0.14, brass, 0.4, 0.6); buttplate.position.set(0, 0.41, 0.02); buttplate.rotation.x = 0.12; gun.add(buttplate);
+    // ---- Lock, hammer, trigger guard (at the grip) ----
+    const lock = box(0.03, 0.11, 0.07, iron, 0.5, 0.55); lock.position.set(0.05, 0.0, 0); gun.add(lock);
+    const hammer = box(0.02, 0.07, 0.03, iron, 0.5, 0.6); hammer.position.set(0.06, 0.05, 0.03); hammer.rotation.z = -0.6; gun.add(hammer);
+    const guard = cyl(0.008, 0.008, 0.1, brass, 5, 0.4, 0.5); guard.position.set(0, -0.06, 0.03); guard.rotation.x = 0.15; gun.add(guard);
+    // ---- Forestock + barrel (forward of the hand) ----
+    const fore = box(0.055, long * 0.6, 0.07, wood, 0.82); fore.position.y = -(long * 0.3); gun.add(fore);
+    const barrel = cyl(0.017, 0.021, long, iron, 10, 0.32, 0.65); barrel.position.y = -(long * 0.5); gun.add(barrel);
+    const bands = [-0.35, -0.62, -0.86];
+    for (const f of bands) { const b = cyl(0.03, 0.03, 0.035, brass, 8, 0.4, 0.5); b.position.y = long * f; gun.add(b); }
+    const ramrod = cyl(0.008, 0.008, long * 0.72, 0x8a6a3a, 5, 0.7); ramrod.position.set(0, -(long * 0.42), 0.055); gun.add(ramrod);
+    const muzzle = cyl(0.026, 0.026, 0.05, iron, 10, 0.35, 0.6); muzzle.position.y = -(long + 0.02); gun.add(muzzle);
+    // ---- Socket bayonet ----
     const bayonet = new THREE.Mesh(
-      new THREE.ConeGeometry(0.02, 0.34, 6),
-      new THREE.MeshStandardMaterial({ color: 0xcdd2d8, metalness: 0.7, roughness: 0.3 })
+      new THREE.ConeGeometry(0.016, rifle ? 0.34 : 0.4, 6),
+      new THREE.MeshStandardMaterial({ color: 0xd2d6dc, metalness: 0.7, roughness: 0.28 })
     );
-    bayonet.position.y = -(long + 0.17); bayonet.rotation.x = Math.PI; bayonet.castShadow = true; gun.add(bayonet);
+    bayonet.position.y = -(long + 0.06 + (rifle ? 0.17 : 0.2)); bayonet.rotation.x = Math.PI; bayonet.castShadow = true; gun.add(bayonet);
+    gun.traverse((o) => { if (o.isMesh) o.castShadow = true; });
     arms.right.hand.add(gun);
-    arms.right.hand.userData.weaponTip = new THREE.Vector3(0, -(long + 0.34), 0);
-    // Off hand cradles the forestock.
-    arms.left.shoulder.userData.grip = { x: 0.9, z: -0.16 };
-    arms.left.elbow.userData.grip = { x: 1.05 };
+    arms.right.hand.userData.weaponTip = new THREE.Vector3(0, -(long + 0.3), 0);
+    arms.right.hand.userData.muzzle = new THREE.Vector3(0, -(long + 0.02), 0);   // for the muzzle flash
+    // Off hand cradles the forestock forward of the lock.
+    arms.left.shoulder.userData.grip = { x: 0.85, z: -0.14 };
+    arms.left.elbow.userData.grip = { x: 0.7 };
   }
 
   // Left hand = shield, bow-grip or bare.

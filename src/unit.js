@@ -846,6 +846,13 @@ export class Unit {
     const tgt = this._comboTarget;
     if (!tgt || !tgt.alive || tgt.hasSurrendered) return;
     const dmg = this.stats.dmg * (this.ranged.dmgMul || 1);
+    // A firearm belches flame and smoke from the muzzle as it fires.
+    if (this.firearm) {
+      const off = this.weaponKind === 'rifle' ? 1.05 : 0.95;
+      const dx = Math.sin(this.facing), dz = Math.cos(this.facing);
+      this._v.set(this.position.x + dx * off, 1.45, this.position.z + dz * off);
+      game.spawnMuzzleFlash(this._v, dx, dz);
+    }
     game.spawnProjectile(this, tgt, m.projectile, dmg);
   }
 
@@ -1486,6 +1493,12 @@ export class Unit {
       j.rightShoulder.rotation.set(1.2, 0, 0.15);
       j.rightElbow.rotation.set(1.7, 0, 0);
       this._applyTwoHandGrip();
+    } else if (this.firearm) {
+      // Ported ready: musket slanted across the body, both hands on it.
+      j.rightShoulder.rotation.set(0.55, 0, -0.1);
+      j.rightElbow.rotation.set(1.2, 0, 0);
+      j.leftShoulder.rotation.set(0.85, 0, 0.3);
+      j.leftElbow.rotation.set(0.9, 0, 0);
     } else {
       // Weapon held READY forward (blade up at the ready), never at the ground.
       j.rightShoulder.rotation.set(0.3, 0, 0);

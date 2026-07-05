@@ -214,10 +214,20 @@ function shootPose(j, t) {
 }
 
 function musketPose(j, t) {
-  // Level the piece at the foe, a sharp recoil kick at the shot, then recover.
-  j.rightShoulder.rotation.x = kf(t, [[0, 0.35], [0.35, 0.55], [0.5, 0.52], [0.58, 0.68], [1, 0.35]]);
-  j.rightElbow.rotation.x = kf(t, [[0, 1.2], [0.35, 1.02], [0.5, 0.98], [0.58, 1.3], [1, 1.2]]);
-  j.chest.rotation.y = kf(t, [[0, 0], [0.4, -0.14], [1, 0]]);   // turn side-on to present
+  // Shoulder the piece and level it (barrel forward ≈ 90° of arm pitch), sight
+  // down the barrel, then a sharp recoil KICK at the shot before recovering.
+  j.rightShoulder.rotation.x = kf(t, [[0, 0.55], [0.3, 0.5], [0.5, 0.48], [0.56, 0.82], [0.66, 0.6], [1, 0.55]]);
+  j.rightShoulder.rotation.z = kf(t, [[0, -0.1], [0.35, -0.15], [1, -0.1]]);
+  j.rightElbow.rotation.x = kf(t, [[0, 1.15], [0.3, 1.06], [0.5, 1.02], [0.56, 1.38], [0.66, 1.12], [1, 1.15]]);
+  // Off hand braces the forestock, then jars with the recoil.
+  j.leftShoulder.rotation.x = kf(t, [[0, 0.8], [0.3, 1.02], [0.5, 1.02], [0.56, 0.9], [1, 0.8]]);
+  j.leftShoulder.rotation.z = 0.2;
+  j.leftElbow.rotation.x = kf(t, [[0, 0.7], [0.3, 0.62], [0.5, 0.6], [1, 0.7]]);
+  // Turn side-on and drop the cheek to the stock; flinch at the muzzle blast.
+  j.chest.rotation.y = kf(t, [[0, 0], [0.4, -0.16], [0.56, -0.1], [1, 0]]);
+  j.chest.rotation.x = kf(t, [[0, -0.04], [0.5, -0.12], [0.56, 0.03], [1, -0.04]]);
+  j.head.rotation.x = kf(t, [[0, 0], [0.4, 0.2], [0.5, 0.22], [0.56, 0.02], [1, 0]]);
+  j.head.rotation.y = kf(t, [[0, 0], [0.4, 0.14], [1, 0]]);
 }
 
 function cannonPose(j, t) {
