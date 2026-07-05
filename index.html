@@ -46,12 +46,12 @@
         </div>
         <div id="tally">
           <div class="tally-side rome">
-            <span class="tally-label">ROMA</span>
+            <span class="tally-label" id="rome-label">ROMA</span>
             <span id="rome-count" class="tally-count">0</span>
           </div>
           <span class="tally-vs">VS</span>
           <div class="tally-side horde">
-            <span class="tally-label">HORDE</span>
+            <span class="tally-label" id="horde-label">HORDE</span>
             <span id="horde-count" class="tally-count">0</span>
           </div>
         </div>
@@ -91,7 +91,9 @@
 
           <!-- Tab 1: Location & weather -->
           <div class="setup-panel active" data-panel="location">
-            <h4 class="setup-label">Location &amp; Weather Conditions</h4>
+            <h4 class="setup-label">⏳ Era</h4>
+            <div class="era-choices" id="era-choices"></div>
+            <h4 class="setup-label" style="margin-top:18px">Location &amp; Weather Conditions</h4>
             <div class="env-choices" id="env-choices"></div>
             <div class="setup-quick">
               <button class="quick-btn" id="cfg-random">🎲 Random</button>
@@ -104,7 +106,7 @@
               <button class="quick-btn save-btn" id="save-btn">💾 Save</button>
             </div>
             <div class="saves-list" id="saves-list"></div>
-            <p class="setup-hint">Pick where and when you fight, then set each army in the Rome and Horde tabs.</p>
+            <p class="setup-hint">Pick the era, where and when you fight, then muster both armies on the Deploy Armies tab.</p>
           </div>
 
           <!-- Tab 2: Deploy — the battlefield map is the interface -->
@@ -115,8 +117,8 @@
               </div>
               <div class="deploy-side">
                 <div class="deploy-totals">
-                  <span class="dt rome">🦅 Rome <b id="rome-total">0</b></span>
-                  <span class="dt horde">🪓 Horde <b id="horde-total">0</b></span>
+                  <span class="dt rome"><span id="rome-side-label">🦅 Rome</span> <b id="rome-total">0</b></span>
+                  <span class="dt horde"><span id="horde-side-label">🪓 Horde</span> <b id="horde-total">0</b></span>
                 </div>
                 <!-- Marker config form — expands here when a marker is selected -->
                 <div class="marker-form" id="marker-dialog" hidden>

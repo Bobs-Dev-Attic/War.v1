@@ -23,10 +23,11 @@ can **watch the victors celebrate** — with Rematch / New Battle right there.
 
 The **New Battle** planner has two tabs:
 
-1. **📍 Location** — pick the battlefield (location, weather & time of day), with
-   **🎲 Random** (roll a whole battle), **✕ Clear all**, and **↺ Defaults** shortcuts.
-   **Save** the whole configuration (battlefield + both armies) under a name and
-   **Load** it back later — saved battles persist in your browser.
+1. **📍 Location** — first pick the **⏳ Era** (see below), then the battlefield
+   (location, weather & time of day), with **🎲 Random** (roll a whole battle),
+   **✕ Clear all**, and **↺ Defaults** shortcuts. **Save** the whole configuration
+   (era + battlefield + both armies) under a name and **Load** it back later —
+   saved battles persist in your browser.
 2. **⚔️ Deploy Armies** — the **battlefield mini-map is the interface**. It shows
    the whole field at once: the **Horde's half up top**, **Rome's below**. **Click
    an empty spot to drop a unit group**; the **panel on the right expands into a
@@ -39,6 +40,24 @@ The **New Battle** planner has two tabs:
 
 So you can, for example, field six legionaries as two groups — a wedge on the
 left flank and a square holding the right — each placed independently.
+
+### Eras
+
+A top-level **⏳ Era** picker sets which two armies take the field. Choosing an era
+swaps both rosters, the soldiers' look, names and ranks, the default armies, and
+the on-screen side labels — the rest of the game plays the same.
+
+- **🏛️ Antiquity** — a **Roman legion** against the **barbarian horde** (the
+  classic match: gladius & scutum, spears, pikes, bows, cavalry and siege engines).
+- **🎆 American Revolution (1775–1783)** — the **Continental Army** against the
+  **British Crown**. Line infantry trade **musket volleys** and close with the
+  **bayonet**; **riflemen** pick off targets at long range; **dragoons** ride the
+  flanks; and **field cannon** hurl **round shot** through the ranks. Continental
+  units wear blue coats and tricornes; the Crown fights in red, with **grenadiers**
+  in tall bearskin caps.
+
+You always command **Side A** (Rome / the Continentals); the enemy charges and
+fires automatically.
 
 ### Battlefields
 

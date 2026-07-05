@@ -20,45 +20,76 @@ export const ATTR_LABELS = {
 // Per-faction attribute ranges [min, max] (inclusive). Romans are disciplined,
 // dexterous veterans; barbarians are stronger, tougher and often faster but
 // wilder and greener.
+// Per-era, per-side attribute ranges [min, max] (inclusive).
 export const PROFILES = {
-  roman:     { str: [9, 13], dex: [10, 15], con: [9, 13],  spd: [9, 13],  exp: [5, 10] },
-  barbarian: { str: [12, 18], dex: [7, 11], con: [12, 18], spd: [9, 16], exp: [2, 7] },
+  antiquity: {
+    roman:     { str: [9, 13], dex: [10, 15], con: [9, 13],  spd: [9, 13],  exp: [5, 10] },
+    barbarian: { str: [12, 18], dex: [7, 11], con: [12, 18], spd: [9, 16], exp: [2, 7] },
+  },
+  revolution: {
+    // Continentals: motivated citizen-soldiers, steadying with the war.
+    roman:     { str: [9, 14], dex: [9, 14], con: [9, 14], spd: [9, 14], exp: [3, 9] },
+    // British regulars: drilled professionals, cool under fire.
+    barbarian: { str: [10, 15], dex: [10, 15], con: [10, 15], spd: [8, 13], exp: [5, 11] },
+  },
 };
 
 const NAMES = {
-  roman: ['Marcus', 'Gaius', 'Lucius', 'Titus', 'Quintus', 'Aulus', 'Decimus',
-          'Servius', 'Publius', 'Gnaeus', 'Flavius', 'Cassius'],
-  barbarian: ['Ragnar', 'Wulfgar', 'Borin', 'Throk', 'Gorm', 'Hrothgar', 'Skarde',
-              'Ivar', 'Bjorn', 'Ulf', 'Draggo', 'Kest'],
+  antiquity: {
+    roman: ['Marcus', 'Gaius', 'Lucius', 'Titus', 'Quintus', 'Aulus', 'Decimus',
+            'Servius', 'Publius', 'Gnaeus', 'Flavius', 'Cassius'],
+    barbarian: ['Ragnar', 'Wulfgar', 'Borin', 'Throk', 'Gorm', 'Hrothgar', 'Skarde',
+                'Ivar', 'Bjorn', 'Ulf', 'Draggo', 'Kest'],
+  },
+  revolution: {
+    roman: ['Nathaniel', 'Josiah', 'Ezra', 'Samuel', 'Caleb', 'Jedediah', 'Amos',
+            'Silas', 'Enoch', 'Reuben', 'Asa', 'Elias'],
+    barbarian: ['Percival', 'Reginald', 'Nigel', 'Cedric', 'Edmund', 'Rupert', 'Archibald',
+                'Basil', 'Cuthbert', 'Horace', 'Wesley', 'Clive'],
+  },
 };
 
 const RANKS = {
-  roman: (exp) => (exp >= 9 ? 'Centurion' : exp >= 7 ? 'Veteran' : exp >= 5 ? 'Legionary' : 'Recruit'),
-  barbarian: (exp) => (exp >= 6 ? 'Chieftain' : exp >= 4 ? 'Berserker' : 'Raider'),
+  antiquity: {
+    roman: (exp) => (exp >= 9 ? 'Centurion' : exp >= 7 ? 'Veteran' : exp >= 5 ? 'Legionary' : 'Recruit'),
+    barbarian: (exp) => (exp >= 6 ? 'Chieftain' : exp >= 4 ? 'Berserker' : 'Raider'),
+  },
+  revolution: {
+    roman: (exp) => (exp >= 8 ? 'Colonel' : exp >= 6 ? 'Captain' : exp >= 4 ? 'Sergeant' : 'Private'),
+    barbarian: (exp) => (exp >= 8 ? 'Colonel' : exp >= 6 ? 'Captain' : exp >= 4 ? 'Corporal' : 'Regular'),
+  },
 };
+
+// Fastest possible Speed roll across every era/side — used to floor mount speed.
+export const MAX_SPD_ATTR = Math.max(
+  ...Object.values(PROFILES).flatMap((era) => Object.values(era).map((p) => p.spd[1]))
+);
 
 function randInt(min, max) {
   return min + Math.floor(Math.random() * (max - min + 1));
 }
 
-let _nameIdx = { roman: Math.floor(Math.random() * 12), barbarian: Math.floor(Math.random() * 12) };
+const _era = (era) => (era && PROFILES[era] ? era : 'antiquity');
+let _nameIdx = {};
 
-export function rollAttributes(faction) {
-  const p = PROFILES[faction];
+export function rollAttributes(faction, era) {
+  const p = PROFILES[_era(era)][faction];
   const a = {};
   for (const k of ATTRS) a[k] = randInt(p[k][0], p[k][1]);
   return a;
 }
 
-export function pickName(faction) {
-  const list = NAMES[faction];
-  const n = list[_nameIdx[faction] % list.length];
-  _nameIdx[faction]++;
+export function pickName(faction, era) {
+  const list = NAMES[_era(era)][faction];
+  const key = _era(era) + ':' + faction;
+  if (_nameIdx[key] === undefined) _nameIdx[key] = Math.floor(Math.random() * list.length);
+  const n = list[_nameIdx[key] % list.length];
+  _nameIdx[key]++;
   return n;
 }
 
-export function rankFor(faction, exp) {
-  return RANKS[faction](exp);
+export function rankFor(faction, exp, era) {
+  return RANKS[_era(era)][faction](exp);
 }
 
 // Turn raw attributes into the numbers the combat sim actually uses.

@@ -116,7 +116,18 @@ function buildSiege(c) {
   }
 
   const siegeArm = new THREE.Group();
-  if (kind === 'ballista') {
+  if (kind === 'cannon') {
+    // A field gun: an iron barrel on a wheeled carriage. The barrel (siegeArm)
+    // recoils along its length when fired. The carriage crew figure stands aside.
+    const trail = box(0.2, 0.16, 1.4, wood, 0.85); trail.position.set(0, 0.42, 0.55); base.add(trail);
+    for (const sx of [-0.5, 0.5]) { const cheek = box(0.12, 0.5, 0.9, wood, 0.85); cheek.position.set(sx, 0.62, -0.15); base.add(cheek); }
+    siegeArm.position.set(0, 0.78, 0); root.add(siegeArm);
+    const barrel = cyl(0.14, 0.19, 1.35, 0x2a2c30, 14, 0.5, 0.55); barrel.rotation.x = Math.PI / 2; barrel.position.set(0, 0, -0.35); siegeArm.add(barrel);
+    const cascabel = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), new THREE.MeshStandardMaterial({ color: 0x2a2c30, metalness: 0.55, roughness: 0.5 }));
+    cascabel.position.set(0, 0, 0.42); siegeArm.add(cascabel);
+    const muzzle = cyl(0.16, 0.16, 0.12, 0x1e2024, 14, 0.5, 0.55); muzzle.rotation.x = Math.PI / 2; muzzle.position.set(0, 0, -1.0); siegeArm.add(muzzle);
+    siegeArm.userData.recoil = true;
+  } else if (kind === 'ballista') {
     const post = box(0.14, 0.8, 0.16, wood, 0.85); post.position.set(0, 0.85, -0.15); base.add(post);
     const trough = box(0.14, 0.1, 1.5, wood, 0.85); trough.position.set(0, 1.2, 0.35); root.add(trough);
     siegeArm.position.set(0, 1.2, -0.15); root.add(siegeArm);
@@ -253,6 +264,30 @@ export function buildHumanoid(cfg) {
     cap.position.y = 0.24;
     cap.castShadow = true;
     head.add(cap);
+  } else if (c.helmet === 'tricorne') {
+    // Three-cornered hat: a low crown over a wide up-turned brim.
+    const felt = c.hat || 0x1c1712;
+    const crown = new THREE.Mesh(
+      new THREE.SphereGeometry(0.15, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+      new THREE.MeshStandardMaterial({ color: felt, roughness: 0.95 })
+    );
+    crown.position.y = 0.2; crown.scale.y = 0.72; crown.castShadow = true; head.add(crown);
+    const brim = cyl(0.28, 0.28, 0.035, felt, 3, 0.95);   // triangular brim
+    brim.position.y = 0.19; brim.rotation.y = Math.PI / 2; head.add(brim);
+    if (c.cockade) { const c2 = box(0.05, 0.05, 0.02, c.cockade, 0.7); c2.position.set(-0.12, 0.24, -0.02); head.add(c2); }
+  } else if (c.helmet === 'bearskin') {
+    // Tall grenadier bearskin cap.
+    const fur = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.16, 0.17, 0.38, 12),
+      new THREE.MeshStandardMaterial({ color: 0x14100c, roughness: 1 })
+    );
+    fur.position.y = 0.36; fur.castShadow = true; head.add(fur);
+    const dome = new THREE.Mesh(
+      new THREE.SphereGeometry(0.16, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+      new THREE.MeshStandardMaterial({ color: 0x14100c, roughness: 1 })
+    );
+    dome.position.y = 0.54; head.add(dome);
+    const plate = box(0.16, 0.1, 0.02, c.plate || 0xcaa23a, 0.4, 0.6); plate.position.set(0, 0.3, -0.15); head.add(plate);
   }
 
   // ---- Legs ----
@@ -494,6 +529,24 @@ function attachEquipment(c, arms) {
     bow.rotation.x = -1.15;              // stand it upright against the forward arm
     arms.left.hand.add(bow);
     arms.left.hand.userData.isBow = true;
+  } else if (c.weapon === 'musket' || c.weapon === 'rifle') {
+    // A muzzle-loader: wooden stock + steel barrel run along the hand's −y (so a
+    // raised elbow shoulders it), tipped with a socket bayonet.
+    const long = c.weapon === 'rifle' ? 1.5 : 1.32;
+    const gun = new THREE.Group();
+    const stock = box(0.06, long * 0.46, 0.08, 0x5a3a1e, 0.85); stock.position.y = -(long * 0.22); gun.add(stock);
+    const barrel = cyl(0.02, 0.022, long, 0x30302e, 8, 0.4, 0.6); barrel.position.y = -(long * 0.5); gun.add(barrel);
+    const lock = box(0.05, 0.1, 0.06, 0x39312a, 0.5, 0.4); lock.position.set(0.05, -0.13, 0); gun.add(lock);
+    const bayonet = new THREE.Mesh(
+      new THREE.ConeGeometry(0.02, 0.34, 6),
+      new THREE.MeshStandardMaterial({ color: 0xcdd2d8, metalness: 0.7, roughness: 0.3 })
+    );
+    bayonet.position.y = -(long + 0.17); bayonet.rotation.x = Math.PI; bayonet.castShadow = true; gun.add(bayonet);
+    arms.right.hand.add(gun);
+    arms.right.hand.userData.weaponTip = new THREE.Vector3(0, -(long + 0.34), 0);
+    // Off hand cradles the forestock.
+    arms.left.shoulder.userData.grip = { x: 0.9, z: -0.16 };
+    arms.left.elbow.userData.grip = { x: 1.05 };
   }
 
   // Left hand = shield, bow-grip or bare.
@@ -595,3 +648,39 @@ export const BARBARIAN_CONFIG = {
   weapon: 'axe',
   shield: 'round',
 };
+
+// ---- American Revolution ----
+export const CONTINENTAL_CONFIG = {
+  skin: 0xc99a6a,
+  torso: 0x28407a,      // blue regimental coat
+  arms: 0x28407a,
+  legs: 0xd8d0bc,       // white breeches
+  belt: 0xe6ddc8,       // crossbelts
+  boots: 0x2a1c10,
+  helmet: 'tricorne',
+  pauldrons: false,
+  weapon: 'musket',
+  shield: null,
+};
+export const BRITISH_CONFIG = {
+  skin: 0xcaa07a,
+  torso: 0xa42a24,      // red coat
+  arms: 0xa42a24,
+  legs: 0xe0d8c4,
+  belt: 0xeee6d4,
+  boots: 0x1e150c,
+  helmet: 'tricorne',
+  pauldrons: false,
+  weapon: 'musket',
+  shield: null,
+};
+
+const CONFIGS = {
+  antiquity: { roman: ROMAN_CONFIG, barbarian: BARBARIAN_CONFIG },
+  revolution: { roman: CONTINENTAL_CONFIG, barbarian: BRITISH_CONFIG },
+};
+
+// The base humanoid config for a side in an era (a unit type's cfg layers on top).
+export function baseConfig(era, faction) {
+  return (CONFIGS[era] || CONFIGS.antiquity)[faction];
+}
